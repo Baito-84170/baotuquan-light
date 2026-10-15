@@ -264,4 +264,17 @@
     <string name="update_now">下载并安装</string>
     <string name="update_page">打开发布页</string>
     <string name="update_later">稍后</string>
+
+    <!-- 意见反馈 -->
+    <string name="settings_feedback">意见反馈</string>
+    <string name="settings_feedback_sub">用着不对、或者想要新功能，跟我说</string>
+    <string name="fb_title">意见反馈</string>
+    <string name="fb_hint">用着哪里不对、想要什么功能、觉得哪里别扭，都可以写在这里。\n\n我没有服务器，所以没有「一键提交」—— 复制之后粘到微信 / QQ 发给我最快。</string>
+    <string name="fb_label_input">你的反馈</string>
+    <string name="fb_input_hint">例如：洗完澡结束之后，没有自动跳到支付宝……</string>
+    <string name="fb_diag_label">附带诊断信息</string>
+    <string name="fb_copy">复制反馈内容</string>
+    <string name="fb_mail">发邮件给我</string>
+    <string name="fb_github">提交到 GitHub Issues</string>
+    <string name="fb_note">「复制反馈内容」是最快的：粘到微信或 QQ 里发给我就行。\n\nGitHub Issues 是**公开**的，别人也能看到 —— 好处是你能看到处理进展。\n\n诊断信息只包含版本、机型和登录状态，不含设备编号、账号或任何凭据。</string>
 </resources>

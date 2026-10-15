@@ -19,6 +19,7 @@ public final class WhatsNew {
 
     /** versionCode，从新到旧。 */
     private static final int[] CODES = {
+            48,
             47,
             46,
             45,
@@ -26,6 +27,7 @@ public final class WhatsNew {
 
     /** 对应的版本名，和 CODES 一一对应。 */
     private static final String[] NAMES = {
+            "7.10",
             "7.9",
             "7.8",
             "7.7",
@@ -33,6 +35,9 @@ public final class WhatsNew {
 
     /** 对应的更新说明，和 CODES 一一对应。 */
     private static final String[] NOTES = {
+            "• 新增「意见反馈」页：在「设置」里。写完之后一键复制，"
+                    + "粘到微信或 QQ 里发给我就行；也可以发邮件或提交到 GitHub。",
+
             "• 洗澡支付修好了：结束洗澡后会直接跳转支付宝付款。\n"
                     + "• 免密支付暂时无法使用，会走普通支付宝支付。\n"
                     + "• ⚠️ 上个版本用过洗澡的同学，记得检查有没有卡住未支付的订单 —— "

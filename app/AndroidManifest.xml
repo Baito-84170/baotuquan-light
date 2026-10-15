@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.self.water"
-    android:versionCode="47"
-    android:versionName="7.9">
+    android:versionCode="48"
+    android:versionName="7.10">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -105,6 +105,11 @@
             android:name=".WaterDevicePickerActivity"
             android:exported="false"
             android:label="@string/picker_title" />
+
+        <activity
+            android:name=".FeedbackActivity"
+            android:exported="false"
+            android:label="@string/fb_title" />
 
         <!-- 桌面小组件。APPWIDGET_UPDATE 是系统广播，必须 exported="true"，
              否则部分 ROM（含 MIUI）不会把更新事件投递过来。 -->

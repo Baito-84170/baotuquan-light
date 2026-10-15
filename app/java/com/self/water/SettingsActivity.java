@@ -96,6 +96,12 @@ public class SettingsActivity extends BaseActivity {
             }
         });
 
+        findViewById(R.id.rowFeedback).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, FeedbackActivity.class));
+            }
+        });
         findViewById(R.id.rowAbout).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
