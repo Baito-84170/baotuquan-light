@@ -234,6 +234,17 @@ public class ShowerActivity extends BaseActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            // 被「有未支付订单」拦住是常见情况，单独给一条出路：
+                            // 否则只会看到 preview 的 code -1（msg 还是 null），根本不知道发生了什么。
+                            if (e instanceof PanggualApi.UnpaidOrderException) {
+                                final String unpaid = ((PanggualApi.UnpaidOrderException) e).orderId;
+                                say("有一笔洗澡订单还没付，它挡住了下一次用水。",
+                                        R.color.warn_bg, R.color.warn);
+                                btnStart.setEnabled(false);
+                                PayFlow.promptUnpaidBlock(ShowerActivity.this, unpaid, payType,
+                                        Prefs.pgToken(ShowerActivity.this), null);
+                                return;
+                            }
                             String m = e.getMessage() == null ? "" : e.getMessage();
                             if (PanggualApi.isExpiredMsg(m)) {
                                 refreshLoginState();
@@ -981,6 +992,10 @@ public class ShowerActivity extends BaseActivity {
                             say(getString(R.string.shower_ended_ok, p.orderNo),
                                     R.color.ok_bg, R.color.ok);
                             loadOccupancy(gid);
+                            // 先用后付：门关上了才结算。这一步不做的话，这笔订单会一直
+                            // 挂着，下一次下单直接被 code 2128 拦住 —— 之前的毛病就在这。
+                            PayFlow.settle(ShowerActivity.this, p.orderNo, payType,
+                                    Prefs.pgToken(ShowerActivity.this), currentRisk());
                         } else {
                             say("结束失败：" + (r.err != null ? r.err : r.msg())
                                     + "\n订单号 " + p.orderNo, R.color.warn_bg, R.color.warn);
@@ -989,6 +1004,15 @@ public class ShowerActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    /** 当前设备的风控参数 —— 解锁和支付都要带。 */
+    private PanggualApi.Risk currentRisk() {
+        JSONObject d = device;
+        return new PanggualApi.Risk(
+                d == null ? "" : d.optString("imei"),
+                d == null ? "" : d.optString("categoryCode"),
+                LAT, LNG);
     }
 
     private void cancelPending() {

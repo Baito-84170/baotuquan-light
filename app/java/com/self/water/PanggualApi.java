@@ -300,6 +300,23 @@ public final class PanggualApi {
     }
 
     /** 由 SN 解析出设备（扫码 → 详情 → SKU 三步合一）。 */
+    /**
+     * 「有未支付订单」拦截（服务端 code 2128）。
+     *
+     * 为什么单独做一个异常：被拦时 `/goods/normal/skus` 的 data 是一个**对象**
+     * （带 incompleteOrderId），不是正常的数组，所以 skuId 会是空的；继续走下去
+     * `/trade/preview` 只会返回 code -1 而且 msg 为 null —— 用户看到的就是一句
+     * 没头没脑的「预览失败」。把订单号抛出来，界面才能给一条走得通的路。
+     */
+    public static final class UnpaidOrderException extends Exception {
+        public final String orderId;
+
+        public UnpaidOrderException(String orderId) {
+            super("有未支付订单需要完成");
+            this.orderId = orderId == null ? "" : orderId;
+        }
+    }
+
     public static JSONObject resolveDevice(String sn, String token) throws Exception {
         JSONObject out = new JSONObject();
 
@@ -356,6 +373,9 @@ public final class PanggualApi {
         out.put("supportAppUserFinish", d.optBoolean("supportAppUserFinish", false));
 
         Resp sku = goodsSkus(goodsId, token);
+        if (isUnpaidBlock(sku)) {
+            throw new UnpaidOrderException(incompleteOrderId(sku));
+        }
         org.json.JSONArray arr = sku.json().optJSONArray("data");
         if (arr != null && arr.length() > 0) {
             JSONObject first = arr.optJSONObject(0);
@@ -428,6 +448,66 @@ public final class PanggualApi {
     /** 当前进行中的洗澡订单（用于判断是否已在用）。返回 data.lastOrderNo。 */
     public static Resp lastOrder(String goodsId, String token) {
         return post("/shower/goods/lastOrder", map("goodsId", goodsId), token, null);
+    }
+
+    // ---------------------------------------------------- 支付
+
+    /**
+     * 预支付：拿到拉起支付渠道需要的参数（data.prepayParam）。
+     *
+     * 胖乖生活是「先用后付」——门开了、洗完了才结算，所以这个调用发生在
+     * 结束洗澡**之后**，不是下单时。官方顺序：
+     *     remoteEnd → order/afterPay/creating → payChannelRoute/againPay
+     *              → pay/unify/prePay{orderNo,payType} → 拉起支付
+     */
+    public static Resp prePay(String orderNo, int payType, String token, Risk risk) {
+        return post("/pay/unify/prePay", map(
+                "orderNo", orderNo == null ? "" : orderNo,
+                "payType", String.valueOf(payType)), token, risk);
+    }
+
+    /** 钱包余额支付（payType 恒为 2）。 */
+    public static Resp walletPay(String orderNo, String token, Risk risk) {
+        return post("/pay/unify/pay", map(
+                "orderNo", orderNo == null ? "" : orderNo,
+                "payType", String.valueOf(PAY_WALLET)), token, risk);
+    }
+
+    /** 查订单是否已支付。返回 data 为 boolean。 */
+    public static Resp payStatus(String orderNo, int payType, String token) {
+        return post("/order/pay_status", map(
+                "orderNo", orderNo == null ? "" : orderNo,
+                "payType", String.valueOf(payType)), token, null);
+    }
+
+    /** 取 prepayParam（交给支付渠道处理的串）。 */
+    public static String pickPrepayParam(Resp r) {
+        JSONObject j = r == null ? null : r.json();
+        JSONObject d = j == null ? null : j.optJSONObject("data");
+        return d == null ? "" : d.optString("prepayParam", "");
+    }
+
+    /**
+     * code 2128「有未支付订单需要完成」时，服务端会带回堵住的那笔订单号。
+     * 这是继续下单的唯一出路 —— 先把它付掉。
+     */
+    public static String incompleteOrderId(Resp r) {
+        JSONObject j = r == null ? null : r.json();
+        if (j == null || j.optInt("code", 0) != 2128) {
+            return "";
+        }
+        JSONObject d = j.optJSONObject("data");
+        if (d == null) {
+            return "";
+        }
+        String id = d.optString("incompleteOrderId", "");
+        return id.length() == 0 ? d.optString("incompleteOrderNo", "") : id;
+    }
+
+    /** 是不是「有未支付订单」的拦截。 */
+    public static boolean isUnpaidBlock(Resp r) {
+        JSONObject j = r == null ? null : r.json();
+        return j != null && j.optInt("code", 0) == 2128;
     }
 
     /** 钱包余额。返回 data.balance。 */
