@@ -71,10 +71,17 @@ public final class UpdateChecker {
     public static final String APK_LATEST_URL =
             "https://github.com/" + REPO + "/releases/latest/download/" + APK_ASSET;
 
-    /** update.json 的镜像，按顺序试。 */
+    /**
+     * update.json 的镜像，按顺序试。
+     *
+     * raw.githubusercontent 是实时内容（只有几分钟 CDN 缓存）所以放第一个；
+     * jsDelivr 对分支引用有约 12 小时缓存，可能拿到旧版本，因此即便它先答了
+     * 「已是最新」也要继续问下一个（见 fetch）。国内 raw 有时不通，那时靠
+     * jsDelivr 或 API 兜底。
+     */
     private static final String[] MIRRORS = {
-            "https://cdn.jsdelivr.net/gh/" + REPO + "@main/update.json",
             "https://raw.githubusercontent.com/" + REPO + "/main/update.json",
+            "https://cdn.jsdelivr.net/gh/" + REPO + "@main/update.json",
     };
 
     /** 自动检查的间隔：12 小时。手动检查不受这个限制。 */
@@ -184,18 +191,31 @@ public final class UpdateChecker {
 
     // ---------------------------------------------------- 查询
 
-    /** 依次尝试各更新源。返回 null 表示已经是最新。 */
+    /**
+     * 依次尝试各更新源。返回 null 表示已经是最新。
+     *
+     * 这里**不**在拿到第一个「已是最新」时就收工 —— 镜像有缓存，可能其中
+     * 一个还是旧内容。只有所有源都答了、且都没有新版本，才算真的最新。
+     */
     private static Info fetch(Context c) throws Exception {
         Exception last = null;
+        boolean answered = false;
         for (String url : MIRRORS) {
             try {
-                return fromJson(url, c);      // null = 已是最新，不用再试别的源
+                Info info = fromJson(url, c);
+                answered = true;
+                if (info != null) {
+                    return info;              // 找到新版本，立即返回
+                }
             } catch (Exception e) {
                 last = e;                     // 这个源不通，换下一个
             }
         }
+        if (answered) {
+            return null;                      // 所有源都答了，且都是最新
+        }
         try {
-            return fromApi(c);
+            return fromApi(c);                // 兜底：GitHub Releases API
         } catch (Exception e) {
             throw last != null ? last : e;
         }
