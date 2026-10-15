@@ -1,7 +1,7 @@
 {
-    "versionCode":  46,
-    "versionName":  "7.8",
-    "notes":  "**新增自动检查更新。**\n\n- 启动时自动检查（12 小时最多一次），设置页里也有「检查更新」手动入口\n- 发现新版本会列出更新说明，可在应用内直接下载并拉起安装\n- 点过「稍后」的版本不会反复打扰；手动检查仍然会提示\n- 更新源是本项目的 GitHub Releases\n\n新增 `REQUEST_INSTALL_PACKAGES` 权限，只用于安装本应用自己的新版本。\n下载走系统 DownloadManager，不需要存储权限。",
+    "versionCode":  47,
+    "versionName":  "7.9",
+    "notes":  "【自动更新功能测试】\n\n如果你看到这段说明，说明「发现新版本」弹窗工作正常。这只是一个临时版本，测完就会删掉。",
     "apkUrl":  "https://github.com/Baito-84170/baotuquan-light/releases/latest/download/baotuquan-light.apk",
     "page":  "https://github.com/Baito-84170/baotuquan-light/releases/latest"
 }
