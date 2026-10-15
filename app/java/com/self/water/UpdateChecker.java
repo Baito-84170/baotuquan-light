@@ -1,0 +1,457 @@
+package com.self.water;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageInfo;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 检查更新。
+ *
+ * 更新源就是本项目的 GitHub Releases 页面。发版时约定好三件事，
+ * 这里的解析逻辑依赖它们（tools/publish-release.ps1 会自动保证）：
+ *
+ *   1. tag 形如 {@code v7.8}，当版本名用；
+ *   2. Release 正文第一行藏一句 {@code <!-- versionCode: 46 -->} ——
+ *      HTML 注释在页面上不显示，但能拿来精确比较版本。万一没写，
+ *      就退回去把版本名里的数字逐段比大小；
+ *   3. APK 作为 Release 附件上传，取第一个 .apk 附件。
+ *
+ * 检查本身只发一个 GET，不下载任何东西；要不要下载由用户点。
+ * 另外，未发布的仓库（还没有任何 Release）会返回 404，这按「已是最新」处理。
+ */
+public final class UpdateChecker {
+
+    public static final String REPO = "Baito-84170/baotuquan-light";
+    public static final String RELEASES_PAGE =
+            "https://github.com/" + REPO + "/releases/latest";
+    private static final String API =
+            "https://api.github.com/repos/" + REPO + "/releases/latest";
+
+    /** 自动检查的间隔：12 小时。手动检查不受这个限制。 */
+    public static final long AUTO_INTERVAL_MS = 12L * 3600L * 1000L;
+
+    private static final int NOTES_MAX = 700;
+
+    private UpdateChecker() {
+    }
+
+    /** 一条可用的更新。 */
+    public static final class Info {
+        /** 服务端 versionCode；拿不到标记时为 0。 */
+        public int code;
+        public String name = "";
+        public String notes = "";
+        public String apkUrl = "";
+        public String apkName = "";
+        public String page = RELEASES_PAGE;
+    }
+
+    public interface Callback {
+        /** info 为 null 表示已经是最新版（或还没发布过）。 */
+        void onResult(Info info);
+
+        void onError(String msg);
+    }
+
+    // ---------------------------------------------------- 对外入口
+
+    /**
+     * 检查更新并在有新版时弹窗。
+     *
+     * @param manual true = 用户手动点的（会提示「已是最新」/失败原因）；
+     *               false = 启动时自动跑的（安静失败，且「稍后」过的版本不再打扰）
+     */
+    public static void start(final Activity a, final boolean manual) {
+        if (manual) {
+            Toast.makeText(a, R.string.update_checking, Toast.LENGTH_SHORT).show();
+        }
+        check(a, manual, new Callback() {
+            @Override
+            public void onResult(Info info) {
+                if (info == null) {
+                    if (manual) {
+                        Toast.makeText(a,
+                                a.getString(R.string.update_latest, installedName(a)),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                    return;
+                }
+                // 用户点过「稍后」的版本，自动检查就不再打扰；手动检查照旧提示
+                if (!manual && info.name.equals(Prefs.skippedUpdate(a))) {
+                    return;
+                }
+                prompt(a, info);
+            }
+
+            @Override
+            public void onError(String msg) {
+                if (manual) {
+                    Toast.makeText(a, a.getString(R.string.update_failed, msg),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    /** 只查不弹窗。force=false 时受 12 小时间隔限制。 */
+    public static void check(final Context ctx, final boolean force, final Callback cb) {
+        final Context c = ctx.getApplicationContext();
+        if (!force) {
+            long last = Prefs.lastUpdateCheck(c);
+            if (last > 0 && System.currentTimeMillis() - last < AUTO_INTERVAL_MS) {
+                return;
+            }
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Info info = fetch(c);
+                    Prefs.setLastUpdateCheck(c, System.currentTimeMillis());
+                    post(cb, info, null);
+                } catch (Exception e) {
+                    post(cb, null, brief(e));
+                }
+            }
+        }).start();
+    }
+
+    private static void post(final Callback cb, final Info info, final String err) {
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                if (cb == null) {
+                    return;
+                }
+                if (err != null) {
+                    cb.onError(err);
+                } else {
+                    cb.onResult(info);
+                }
+            }
+        });
+    }
+
+    // ---------------------------------------------------- 查询
+
+    private static Info fetch(Context c) throws Exception {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(API).openConnection();
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(8000);
+            conn.setRequestProperty("Accept", "application/vnd.github+json");
+            conn.setRequestProperty("User-Agent", "baotuquan-light/" + installedName(c));
+
+            int http = conn.getResponseCode();
+            if (http == 404) {
+                return null;                 // 还没发布过任何 Release
+            }
+            if (http != 200) {
+                throw new Exception("GitHub 返回 HTTP " + http);
+            }
+
+            JSONObject j = new JSONObject(read(conn.getInputStream()));
+            String tag = j.optString("tag_name", "");
+            String body = j.optString("body", "");
+
+            Info info = new Info();
+            info.name = tagVersion(tag);
+            if (info.name.length() == 0) {
+                info.name = tag;
+            }
+            info.page = j.optString("html_url", RELEASES_PAGE);
+            info.notes = plainNotes(body);
+
+            JSONArray assets = j.optJSONArray("assets");
+            if (assets != null) {
+                for (int i = 0; i < assets.length(); i++) {
+                    JSONObject a = assets.optJSONObject(i);
+                    if (a == null) {
+                        continue;
+                    }
+                    String n = a.optString("name", "");
+                    if (n.toLowerCase().endsWith(".apk")) {
+                        info.apkUrl = a.optString("browser_download_url", "");
+                        info.apkName = n;
+                        break;
+                    }
+                }
+            }
+
+            int marker = markerCode(body);
+            if (marker > 0) {
+                info.code = marker;
+                if (marker <= installedCode(c)) {
+                    return null;
+                }
+            } else if (compareNums(info.name, installedName(c)) <= 0) {
+                return null;
+            }
+            // 没有 APK 附件就没法自动更新，当没有新版
+            return info.apkUrl.length() == 0 ? null : info;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+    }
+
+    private static String read(InputStream in) throws Exception {
+        BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = r.readLine()) != null) {
+            sb.append(line).append('\n');
+        }
+        r.close();
+        return sb.toString();
+    }
+
+    /** v7.8 → 7.8 */
+    private static String tagVersion(String tag) {
+        if (tag == null) {
+            return "";
+        }
+        return tag.trim().replaceAll("^[vV]", "");
+    }
+
+    /** 从正文里取 versionCode 标记；没有就返回 0。 */
+    private static int markerCode(String body) {
+        if (body == null) {
+            return 0;
+        }
+        Matcher m = Pattern.compile("versionCode\\s*[:：]\\s*(\\d+)").matcher(body);
+        return m.find() ? toInt(m.group(1)) : 0;
+    }
+
+    /** 去掉版本标记那一行和 HTML 注释，得到给人看的更新说明。 */
+    private static String plainNotes(String body) {
+        if (body == null) {
+            return "";
+        }
+        String s = body.replaceAll("(?m)^.*versionCode\\s*[:：]\\s*\\d+.*$", "");
+        s = s.replaceAll("(?s)<!--.*?-->", "");
+        s = s.replaceAll("(?m)^#{1,6}\\s*", "");      // 去掉 markdown 标题号
+        s = s.replaceAll("\\*\\*", "").replaceAll("`", "");
+        s = s.trim();
+        if (s.length() > NOTES_MAX) {
+            s = s.substring(0, NOTES_MAX) + "…";
+        }
+        return s;
+    }
+
+    /** 把字符串里的数字逐段抽出来比大小：v7.10 > v7.9 > v7.8。 */
+    private static int compareNums(String a, String b) {
+        List<Integer> x = nums(a);
+        List<Integer> y = nums(b);
+        int n = Math.max(x.size(), y.size());
+        for (int i = 0; i < n; i++) {
+            int xi = i < x.size() ? x.get(i) : 0;
+            int yi = i < y.size() ? y.get(i) : 0;
+            if (xi != yi) {
+                return xi < yi ? -1 : 1;
+            }
+        }
+        return 0;
+    }
+
+    private static List<Integer> nums(String v) {
+        List<Integer> out = new ArrayList<Integer>();
+        Matcher m = Pattern.compile("\\d+").matcher(v == null ? "" : v);
+        while (m.find()) {
+            out.add(toInt(m.group()));
+        }
+        return out;
+    }
+
+    private static int toInt(String s) {
+        try {
+            return Integer.parseInt(s);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    public static int installedCode(Context c) {
+        try {
+            PackageInfo p = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+            return p.versionCode;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    public static String installedName(Context c) {
+        try {
+            PackageInfo p = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+            return p.versionName == null ? "" : p.versionName;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static String brief(Exception e) {
+        String m = e.getMessage();
+        if (m == null || m.length() == 0) {
+            m = e.getClass().getSimpleName();
+        }
+        return m.length() > 90 ? m.substring(0, 90) : m;
+    }
+
+    // ---------------------------------------------------- 弹窗
+
+    private static void prompt(final Activity a, final Info info) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("当前版本：v").append(installedName(a))
+          .append("\n最新版本：v").append(info.name);
+        if (info.notes.length() > 0) {
+            sb.append("\n\n").append(info.notes);
+        }
+        new AlertDialog.Builder(a)
+                .setTitle(R.string.update_title)
+                .setMessage(sb.toString())
+                .setPositiveButton(R.string.update_now, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        downloadAndInstall(a, info);
+                    }
+                })
+                .setNeutralButton(R.string.update_page, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        openPage(a, info);
+                    }
+                })
+                .setNegativeButton(R.string.update_later, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        Prefs.setSkippedUpdate(a, info.name);
+                    }
+                })
+                .show();
+    }
+
+    // ---------------------------------------------------- 下载并安装
+
+    /**
+     * 下载 APK 并在下载完成后拉起系统安装界面。
+     *
+     * 落盘位置按 API 分两路，**都不需要申请存储权限**：
+     *   - API 29+  → 公共下载目录（DownloadManager 自己就是下载器，不受分区存储限制）
+     *   - API 24~28 → 应用自己的外部目录
+     * 万一哪一步不成（比如没给「安装未知应用」权限），就退回浏览器打开 Release 页。
+     */
+    public static void downloadAndInstall(Context ctx, Info info) {
+        final Context c = ctx.getApplicationContext();
+        DownloadManager dm = (DownloadManager) c.getSystemService(Context.DOWNLOAD_SERVICE);
+        if (dm == null) {
+            openPage(c, info);
+            return;
+        }
+        try {
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(info.apkUrl));
+            req.setTitle("趵突泉之光 " + info.name);
+            req.setDescription("正在下载更新…");
+            req.setMimeType("application/vnd.android.package-archive");
+            req.setNotificationVisibility(
+                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            String file = info.apkName.length() == 0
+                    ? ("baotuquan-light-" + info.name + ".apk") : info.apkName;
+            if (Build.VERSION.SDK_INT >= 29) {
+                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, file);
+            } else {
+                req.setDestinationInExternalFilesDir(c, Environment.DIRECTORY_DOWNLOADS, file);
+            }
+            watch(c, dm, dm.enqueue(req), info);
+        } catch (Exception e) {
+            openPage(c, info);
+        }
+    }
+
+    private static void watch(final Context c, final DownloadManager dm,
+                              final long id, final Info info) {
+        final BroadcastReceiver[] holder = new BroadcastReceiver[1];
+        BroadcastReceiver r = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent it) {
+                if (it.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) != id) {
+                    return;
+                }
+                try {
+                    c.unregisterReceiver(holder[0]);
+                } catch (Exception ignored) {
+                }
+                install(c, dm, id, info);
+            }
+        };
+        holder[0] = r;
+        try {
+            // ACTION_DOWNLOAD_COMPLETE 是系统广播，不受 Android 14 注册标志新规影响
+            c.registerReceiver(r, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        } catch (Exception ignored) {
+            // 注册不上也没关系：DownloadManager 自己的通知点一下也能装
+        }
+    }
+
+    private static void install(Context c, DownloadManager dm, long id, Info info) {
+        Uri uri = dm.getUriForDownloadedFile(id);
+        if (uri == null) {
+            openPage(c, info);
+            return;
+        }
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            c.startActivity(i);
+        } catch (Exception e) {
+            openPage(c, info);
+        }
+    }
+
+    /** 跳到系统设置里给我们开「安装未知应用」。 */
+    public static void openInstallSettings(Activity a) {
+        try {
+            a.startActivity(new Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + a.getPackageName())));
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static void openPage(Context c, Info info) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse(info == null ? RELEASES_PAGE : info.page));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(i);
+        } catch (Exception ignored) {
+        }
+    }
+}

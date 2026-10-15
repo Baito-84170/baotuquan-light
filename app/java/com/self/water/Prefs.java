@@ -265,6 +265,30 @@ public final class Prefs {
         sp(c).edit().remove(K_PG_PENDING).apply();
     }
 
+    // ---------------------------------------------------- 检查更新
+
+    private static final String K_UPDATE_AT = "update_at";
+    private static final String K_UPDATE_SKIP = "update_skip";
+
+    /** 上次检查更新的时间戳；0 表示从没查过。 */
+    public static long lastUpdateCheck(Context c) {
+        return sp(c).getLong(K_UPDATE_AT, 0L);
+    }
+
+    public static void setLastUpdateCheck(Context c, long at) {
+        sp(c).edit().putLong(K_UPDATE_AT, at).apply();
+    }
+
+    /** 用户点过「稍后」的版本名 —— 同一个版本不再自动提醒。 */
+    public static String skippedUpdate(Context c) {
+        String v = sp(c).getString(K_UPDATE_SKIP, "");
+        return v == null ? "" : v;
+    }
+
+    public static void setSkippedUpdate(Context c, String version) {
+        sp(c).edit().putString(K_UPDATE_SKIP, version == null ? "" : version).apply();
+    }
+
     // ---------------------------------------------------- 外观
 
     public static final int THEME_SYSTEM = 0;

@@ -89,6 +89,13 @@ public class SettingsActivity extends BaseActivity {
             }
         });
 
+        findViewById(R.id.rowUpdate).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                UpdateChecker.start(SettingsActivity.this, true);
+            }
+        });
+
         findViewById(R.id.rowAbout).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
