@@ -120,6 +120,11 @@ public class HomeActivity extends BaseActivity {
         // 自动查更新。onResume 会频繁触发，节流在 UpdateChecker 里（12 小时一次），
         // 而且「稍后」过的版本不会再弹。
         UpdateChecker.start(this, false);
+        // 升级后第一次打开时说明这次改了什么。放在引导页之后，
+        // 免得全新安装时两个界面叠在一起。
+        if (Prefs.onboarded(this)) {
+            WhatsNew.showIfNeeded(this);
+        }
     }
 
     @Override

@@ -268,6 +268,16 @@ public final class Prefs {
     // ---------------------------------------------------- 检查更新
 
     private static final String K_UPDATE_AT = "update_at";
+    private static final String K_SEEN_VERSION = "seen_version";
+
+    /** 上一次已经看过「更新说明」的 versionCode；0 表示还没记录过。 */
+    public static int lastSeenVersion(Context c) {
+        return sp(c).getInt(K_SEEN_VERSION, 0);
+    }
+
+    public static void setLastSeenVersion(Context c, int code) {
+        sp(c).edit().putInt(K_SEEN_VERSION, code).apply();
+    }
     private static final String K_UPDATE_SKIP = "update_skip";
 
     /** 上次检查更新的时间戳；0 表示从没查过。 */
