@@ -20,6 +20,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -32,17 +33,30 @@ import java.util.regex.Pattern;
 /**
  * 检查更新。
  *
- * 更新源就是本项目的 GitHub Releases 页面。发版时约定好三件事，
- * 这里的解析逻辑依赖它们（tools/publish-release.ps1 会自动保证）：
+ * 更新源是本项目的 GitHub 仓库。取版本信息按这个顺序试，谁先通用谁：
  *
- *   1. tag 形如 {@code v7.8}，当版本名用；
- *   2. Release 正文第一行藏一句 {@code <!-- versionCode: 46 -->} ——
- *      HTML 注释在页面上不显示，但能拿来精确比较版本。万一没写，
- *      就退回去把版本名里的数字逐段比大小；
- *   3. APK 作为 Release 附件上传，取第一个 .apk 附件。
+ *   1. jsDelivr CDN 上的 update.json —— 有全球 CDN，国内通常比 GitHub 直连稳，
+ *      而且没有 API 限流；
+ *   2. raw.githubusercontent.com 上的同一份 update.json；
+ *   3. GitHub Releases API —— 兜底。未认证时每小时只有 60 次（按 IP 算），
+ *      共享出口很容易被打满，所以只当最后手段。
+ *
+ * update.json 长这样（由 tools/publish-release.ps1 自动生成）：
+ * <pre>
+ * {
+ *   "versionCode": 46,
+ *   "versionName": "7.8",
+ *   "notes":       "更新说明",
+ *   "apkUrl":      "https://github.com/.../releases/latest/download/baotuquan-light.apk",
+ *   "page":        "https://github.com/.../releases/latest"
+ * }
+ * </pre>
+ *
+ * APK 附件名固定成 {@link #APK_ASSET}（纯 ASCII），这样 `releases/latest/download/…`
+ * 这个地址永远指向最新一版，不用每版改 URL，也避免中文文件名在 DownloadManager
+ * 里出岔子。
  *
  * 检查本身只发一个 GET，不下载任何东西；要不要下载由用户点。
- * 另外，未发布的仓库（还没有任何 Release）会返回 404，这按「已是最新」处理。
  */
 public final class UpdateChecker {
 
@@ -51,6 +65,17 @@ public final class UpdateChecker {
             "https://github.com/" + REPO + "/releases/latest";
     private static final String API =
             "https://api.github.com/repos/" + REPO + "/releases/latest";
+
+    /** APK 附件的固定名字 —— 纯 ASCII，且让下载地址长期有效。 */
+    public static final String APK_ASSET = "baotuquan-light.apk";
+    public static final String APK_LATEST_URL =
+            "https://github.com/" + REPO + "/releases/latest/download/" + APK_ASSET;
+
+    /** update.json 的镜像，按顺序试。 */
+    private static final String[] MIRRORS = {
+            "https://cdn.jsdelivr.net/gh/" + REPO + "@main/update.json",
+            "https://raw.githubusercontent.com/" + REPO + "/main/update.json",
+    };
 
     /** 自动检查的间隔：12 小时。手动检查不受这个限制。 */
     public static final long AUTO_INTERVAL_MS = 12L * 3600L * 1000L;
@@ -62,12 +87,12 @@ public final class UpdateChecker {
 
     /** 一条可用的更新。 */
     public static final class Info {
-        /** 服务端 versionCode；拿不到标记时为 0。 */
+        /** 服务端 versionCode；拿不到时为 0。 */
         public int code;
         public String name = "";
         public String notes = "";
         public String apkUrl = "";
-        public String apkName = "";
+        public String apkName = APK_ASSET;
         public String page = RELEASES_PAGE;
     }
 
@@ -159,62 +184,128 @@ public final class UpdateChecker {
 
     // ---------------------------------------------------- 查询
 
+    /** 依次尝试各更新源。返回 null 表示已经是最新。 */
     private static Info fetch(Context c) throws Exception {
+        Exception last = null;
+        for (String url : MIRRORS) {
+            try {
+                return fromJson(url, c);      // null = 已是最新，不用再试别的源
+            } catch (Exception e) {
+                last = e;                     // 这个源不通，换下一个
+            }
+        }
+        try {
+            return fromApi(c);
+        } catch (Exception e) {
+            throw last != null ? last : e;
+        }
+    }
+
+    /** 解析 update.json。已经是最新时返回 null。 */
+    private static Info fromJson(String url, Context c) throws Exception {
+        JSONObject j = new JSONObject(httpGet(url, c));
+        int remote = j.optInt("versionCode", 0);
+        String name = j.optString("versionName", "");
+
+        boolean newer = remote > 0
+                ? remote > installedCode(c)
+                : compareNums(name, installedName(c)) > 0;
+        if (!newer) {
+            return null;
+        }
+
+        Info info = new Info();
+        info.code = remote;
+        info.name = name.length() == 0 ? "?" : name;
+        info.notes = cap(j.optString("notes", ""));
+        String apk = j.optString("apkUrl", "");
+        info.apkUrl = apk.length() == 0 ? APK_LATEST_URL : apk;
+        info.apkName = APK_ASSET;
+        info.page = j.optString("page", RELEASES_PAGE);
+        return info;
+    }
+
+    /** 兜底：直接问 GitHub Releases API。 */
+    private static Info fromApi(Context c) throws Exception {
+        String body;
+        try {
+            body = httpGet(API, c);
+        } catch (FileNotFoundException e) {
+            return null;                      // 还没发布过任何 Release
+        }
+        JSONObject j = new JSONObject(body);
+        String tag = j.optString("tag_name", "");
+        String notes = j.optString("body", "");
+
+        Info info = new Info();
+        info.name = tagVersion(tag);
+        if (info.name.length() == 0) {
+            info.name = tag;
+        }
+        info.page = j.optString("html_url", RELEASES_PAGE);
+        info.notes = cap(plainNotes(notes));
+
+        // 优先取固定名附件；没有就退而求其次拿第一个 .apk
+        String fallback = "";
+        String fallbackName = "";
+        JSONArray assets = j.optJSONArray("assets");
+        if (assets != null) {
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject a = assets.optJSONObject(i);
+                if (a == null) {
+                    continue;
+                }
+                String n = a.optString("name", "");
+                if (!n.toLowerCase().endsWith(".apk")) {
+                    continue;
+                }
+                if (APK_ASSET.equals(n)) {
+                    fallback = a.optString("browser_download_url", "");
+                    fallbackName = n;
+                    break;
+                }
+                if (fallback.length() == 0) {
+                    fallback = a.optString("browser_download_url", "");
+                    fallbackName = n;
+                }
+            }
+        }
+        if (fallback.length() == 0) {
+            return null;                      // 没有 APK 附件就没法自动更新
+        }
+        info.apkUrl = fallback;
+        info.apkName = fallbackName;
+
+        int marker = markerCode(notes);
+        if (marker > 0) {
+            info.code = marker;
+            if (marker <= installedCode(c)) {
+                return null;
+            }
+        } else if (compareNums(info.name, installedName(c)) <= 0) {
+            return null;
+        }
+        return info;
+    }
+
+    private static String httpGet(String url, Context c) throws Exception {
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(API).openConnection();
+            conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(8000);
-            conn.setRequestProperty("Accept", "application/vnd.github+json");
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("Accept", "application/json");
             conn.setRequestProperty("User-Agent", "baotuquan-light/" + installedName(c));
 
             int http = conn.getResponseCode();
             if (http == 404) {
-                return null;                 // 还没发布过任何 Release
+                throw new FileNotFoundException("HTTP 404: " + url);
             }
             if (http != 200) {
-                throw new Exception("GitHub 返回 HTTP " + http);
+                throw new Exception("HTTP " + http);
             }
-
-            JSONObject j = new JSONObject(read(conn.getInputStream()));
-            String tag = j.optString("tag_name", "");
-            String body = j.optString("body", "");
-
-            Info info = new Info();
-            info.name = tagVersion(tag);
-            if (info.name.length() == 0) {
-                info.name = tag;
-            }
-            info.page = j.optString("html_url", RELEASES_PAGE);
-            info.notes = plainNotes(body);
-
-            JSONArray assets = j.optJSONArray("assets");
-            if (assets != null) {
-                for (int i = 0; i < assets.length(); i++) {
-                    JSONObject a = assets.optJSONObject(i);
-                    if (a == null) {
-                        continue;
-                    }
-                    String n = a.optString("name", "");
-                    if (n.toLowerCase().endsWith(".apk")) {
-                        info.apkUrl = a.optString("browser_download_url", "");
-                        info.apkName = n;
-                        break;
-                    }
-                }
-            }
-
-            int marker = markerCode(body);
-            if (marker > 0) {
-                info.code = marker;
-                if (marker <= installedCode(c)) {
-                    return null;
-                }
-            } else if (compareNums(info.name, installedName(c)) <= 0) {
-                return null;
-            }
-            // 没有 APK 附件就没法自动更新，当没有新版
-            return info.apkUrl.length() == 0 ? null : info;
+            return read(conn.getInputStream());
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -259,11 +350,15 @@ public final class UpdateChecker {
         s = s.replaceAll("(?s)<!--.*?-->", "");
         s = s.replaceAll("(?m)^#{1,6}\\s*", "");      // 去掉 markdown 标题号
         s = s.replaceAll("\\*\\*", "").replaceAll("`", "");
-        s = s.trim();
-        if (s.length() > NOTES_MAX) {
-            s = s.substring(0, NOTES_MAX) + "…";
+        return cap(s.trim());
+    }
+
+    private static String cap(String s) {
+        if (s == null) {
+            return "";
         }
-        return s;
+        s = s.trim();
+        return s.length() > NOTES_MAX ? (s.substring(0, NOTES_MAX) + "…") : s;
     }
 
     /** 把字符串里的数字逐段抽出来比大小：v7.10 > v7.9 > v7.8。 */
@@ -363,7 +458,7 @@ public final class UpdateChecker {
      * 下载 APK 并在下载完成后拉起系统安装界面。
      *
      * 落盘位置按 API 分两路，**都不需要申请存储权限**：
-     *   - API 29+  → 公共下载目录（DownloadManager 自己就是下载器，不受分区存储限制）
+     *   - API 29+   → 公共下载目录（DownloadManager 是系统下载器，不受分区存储限制）
      *   - API 24~28 → 应用自己的外部目录
      * 万一哪一步不成（比如没给「安装未知应用」权限），就退回浏览器打开 Release 页。
      */
@@ -381,8 +476,7 @@ public final class UpdateChecker {
             req.setMimeType("application/vnd.android.package-archive");
             req.setNotificationVisibility(
                     DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            String file = info.apkName.length() == 0
-                    ? ("baotuquan-light-" + info.name + ".apk") : info.apkName;
+            String file = info.apkName.length() == 0 ? APK_ASSET : info.apkName;
             if (Build.VERSION.SDK_INT >= 29) {
                 req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, file);
             } else {

@@ -30,6 +30,9 @@
 **深色模式**
 跟随系统 / 始终浅色 / 始终深色。
 
+**自动检查更新**
+启动时自动检查（12 小时最多一次），设置页里也有手动入口；发现新版本会列出更新说明，可直接在应用内下载并安装。更新源就是这个仓库的 Releases。
+
 **其他**
 登录过期自动提示并一键重登、历史订单查询、首次启动引导。
 
@@ -41,11 +44,12 @@
 baotuquan-light/
 ├── app/                          应用本体
 │   ├── AndroidManifest.xml
-│   ├── java/com/self/water/      25 个 .java
+│   ├── java/com/self/water/      26 个 .java
 │   ├── res/                      布局、颜色、字符串、图标
 │   ├── libs/zxing-core.jar       唯一的第三方依赖（Apache-2.0）
 │   └── build.ps1                 不用 Gradle 的构建脚本
 ├── ios/                          iOS 版（Scriptable 脚本）
+├── update.json                   ← 应用检查更新时读的版本信息
 ├── CHANGELOG.md
 └── README.md
 ```
