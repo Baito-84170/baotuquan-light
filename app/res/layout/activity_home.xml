@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="36dp"
+        android:paddingBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:letterSpacing="-0.01" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/home_sub"
+            android:textSize="13sp"
+            android:textColor="@color/text_sub" />
+
+        <!-- 取水 -->
+        <LinearLayout
+            android:id="@+id/cardWater"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_clickable"
+            android:elevation="1dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/svc_water"
+                    android:textSize="19sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text" />
+
+                <TextView
+                    android:id="@+id/waterBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:textSize="11sp"
+                    android:textColor="@color/idle"
+                    android:text="@string/badge_not_logged_in" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/waterSub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textSize="12sp"
+                android:textColor="@color/text_sub"
+                android:text="@string/svc_water_desc" />
+        </LinearLayout>
+
+        <!-- 洗澡 -->
+        <LinearLayout
+            android:id="@+id/cardShower"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_clickable"
+            android:elevation="1dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/svc_shower"
+                    android:textSize="19sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text" />
+
+                <TextView
+                    android:id="@+id/showerBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:textSize="11sp"
+                    android:textColor="@color/idle"
+                    android:text="@string/badge_not_logged_in" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/showerSub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textSize="12sp"
+                android:textColor="@color/text_sub"
+                android:text="@string/svc_shower_desc" />
+        </LinearLayout>
+
+        <!-- 洗衣 -->
+        <LinearLayout
+            android:id="@+id/cardLaundry"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_clickable"
+            android:elevation="1dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/svc_laundry"
+                    android:textSize="19sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:textSize="11sp"
+                    android:textColor="@color/idle"
+                    android:text="@string/badge_no_login_needed" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/laundrySub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textSize="12sp"
+                android:textColor="@color/text_sub"
+                android:text="@string/svc_laundry_desc" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:textSize="11sp"
+            android:textColor="@color/text_hint"
+            android:text="@string/home_hint" />
+
+        <TextView
+            android:id="@+id/aboutLink"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:gravity="center"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:textSize="12sp"
+            android:textColor="@color/primary"
+            android:letterSpacing="0.04"
+            android:text="@string/settings_entry" />
+    </LinearLayout>
+</ScrollView>

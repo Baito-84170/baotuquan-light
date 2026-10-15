@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">趵突泉之光</string>
+
+    <string name="login_sub">登录一次，之后自动保持</string>
+    <string name="label_phone">手机号</string>
+    <string name="label_captcha">图形验证码</string>
+    <string name="label_sms">短信验证码</string>
+    <string name="hint_phone">请输入 11 位手机号</string>
+    <string name="hint_captcha">图片上的字符</string>
+    <string name="hint_sms">手机收到的验证码</string>
+    <string name="btn_get_sms">获取短信验证码</string>
+    <string name="btn_login">登 录</string>
+    <string name="btn_refresh_captcha">看不清？换一张</string>
+
+    <string name="main_title">取水</string>
+    <string name="label_device_id">设备编号</string>
+    <string name="hint_device">设备编号</string>
+    <string name="btn_activate">激活取水</string>
+    <string name="btn_end">结束本次用水</string>
+    <string name="btn_logout">退出登录</string>
+    <string name="status_loading">正在读取设备状态…</string>
+
+    <string name="other_services">其他服务</string>
+    <string name="svc_shower">洗澡</string>
+    <string name="svc_laundry">洗衣</string>
+    <string name="svc_hint">洗澡已内建；洗衣跳转智慧笑联小程序（长按可改链接）</string>
+
+    <string name="dlg_edit_title">设置「%1$s」入口</string>
+    <string name="dlg_edit_hint">粘贴支付宝小程序分享链接，或直接填小程序 appId</string>
+    <string name="dlg_ok">保存</string>
+    <string name="dlg_reset">恢复默认</string>
+    <string name="dlg_cancel">取消</string>
+
+    <string name="toast_saved">已保存</string>
+    <string name="toast_reset">已恢复默认（智慧笑联小程序）</string>
+    <string name="toast_no_app">没有 App 能打开这个链接，请确认支付宝已安装</string>
+    <string name="toast_need_config">还没设置链接，长按这个按钮可以粘贴</string>
+
+    <!-- 洗澡（胖乖生活） -->
+    <string name="shower_title">洗澡</string>
+    <string name="shower_not_queried">尚未查询设备</string>
+    <string name="label_shower_sn">机器序列号</string>
+    <string name="hint_shower_sn">可粘贴二维码链接，会自动提取 SN</string>
+    <string name="btn_query_device">查询设备</string>
+    <string name="shower_need_login">需要登录一次胖乖生活账号（手机号 + 短信验证码）</string>
+    <string name="btn_pg_login">登录洗澡账号</string>
+    <string name="btn_pg_logout">退出洗澡账号</string>
+    <string name="btn_shower_start">开始洗澡</string>
+    <string name="btn_shower_end">结束洗澡</string>
+    <string name="shower_status_idle">就绪</string>
+    <string name="pg_login_title">登录洗澡账号</string>
+    <string name="pg_login_sub">胖乖生活 · 只需登录一次</string>
+
+    <!-- 设备记忆 -->
+    <string name="devices_title">设备</string>
+    <string name="devices_title_water">取水设备</string>
+    <string name="devices_title_shower">洗澡设备</string>
+    <string name="devices_hint">点一下切换；长按可拖动排序；点「⋮」可置顶、重命名、删除。列表会显示各设备的实时状态。</string>
+    <string name="devices_add">＋ 添加</string>
+    <string name="devices_add_id_hint">设备编号（取水填 15 位编号；洗澡填 SN）</string>
+    <string name="devices_add_group_hint">分组，可留空（例如「3号公寓」）</string>
+    <string name="devices_search_hint">搜索备注、分组或编号</string>
+    <string name="devices_no_match">没有匹配的设备</string>
+
+    <!-- 扫码 / 批量 -->
+    <string name="scan_title">扫码添加</string>
+    <string name="scan_hint">对准机器屏幕上的二维码</string>
+    <string name="scan_ok">✓ 识别成功</string>
+    <string name="scan_need_camera">需要相机权限才能扫码</string>
+    <string name="devices_add_menu">添加设备</string>
+    <string name="devices_add_scan">📷  扫码添加</string>
+    <string name="devices_add_manual">⌨️  手动输入</string>
+    <string name="devices_add_batch">📋  批量粘贴</string>
+    <string name="devices_export">📤  导出设备库</string>
+    <string name="batch_title">批量添加</string>
+    <string name="batch_hint">每行一个：二维码内容或设备编号\n可以一次粘贴很多条</string>
+    <string name="batch_working">正在解析 %1$d / %2$d …</string>
+    <string name="batch_done">完成：成功 %1$d 条，失败 %2$d 条</string>
+    <string name="export_title">设备库已复制</string>
+    <string name="export_done">JSON 已复制到剪贴板，发给开发者即可内置到 App 里。\n\n共 %1$d 台设备。</string>
+
+    <!-- 关于 / 赞助 -->
+    <string name="about_title">关于</string>
+    <string name="about_version">版本 %1$s (%2$d)</string>
+    <string name="about_developer_label">开 发 者</string>
+    <string name="about_developer">METACOLA</string>
+    <string name="about_desc">一个给山东大学趵突泉校区同学做的小工具，把取水、洗澡、洗衣三件事收进一个 App。\n\n基于对官方 App 接口的互操作性分析独立实现，不包含任何原应用的代码或资源。\n\n账号与设备信息只保存在你自己的手机上。</string>
+    <string name="about_version_label">版本号</string>
+    <string name="about_version_placeholder">—</string>
+    <string name="about_contact">使用中遇到问题、想加功能，或者想把自己楼里的设备整理进内置设备库，都可以直接找开发者。\n\n开发者：METACOLA</string>
+    <string name="about_entry">关于 · METACOLA</string>
+    <string name="devices_empty">还没有记住的设备。\n用一次之后就会自动出现在这里。</string>
+    <string name="devices_name_hint">给它起个名字，比如「3号公寓5楼」</string>
+    <string name="devices_rename">重命名</string>
+    <string name="devices_reparse">重新解析位置</string>
+    <string name="devices_delete">删除</string>
+    <string name="devices_delete_confirm">确定删除「%1$s」？</string>
+    <string name="btn_switch_device">切换</string>
+
+    <!-- 首页 -->
+    <string name="home_sub">山东大学趵突泉校区</string>
+    <string name="home_hint">三个服务各自独立登录，互不影响。</string>
+    <string name="svc_water">取水</string>
+    <string name="svc_water_desc">慧生活798 · 饮水/直饮水</string>
+    <string name="svc_shower_desc">胖乖生活 · 淋浴</string>
+    <string name="svc_laundry_desc">智慧笑联小程序 · 洗衣</string>
+    <string name="badge_logged_in">已登录</string>
+    <string name="badge_not_logged_in">未登录</string>
+    <string name="badge_no_login_needed">免登录</string>
+    <string name="water_need_login">需要登录一次慧生活798账号</string>
+
+    <string name="login_title">登录取水账号</string>
+
+    <!-- 设置 / 外观 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_appearance">外观</string>
+    <string name="settings_theme">深色模式</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">始终浅色</string>
+    <string name="settings_theme_dark">始终深色</string>
+    <string name="settings_theme_hint">选择「跟随系统」后，App 会随手机的深色模式自动切换。</string>
+    <string name="settings_other">其他</string>
+    <string name="settings_about">关于本应用</string>
+    <string name="settings_onboard_again">重新查看使用引导</string>
+    <string name="settings_entry">设置</string>
+
+    <!-- 首次启动引导 -->
+    <string name="onboard_skip">跳过</string>
+    <string name="onboard_next">下一步</string>
+    <string name="onboard_start">开始使用</string>
+    <string name="onboard_t1">欢迎使用\n趵突泉之光</string>
+    <string name="onboard_d1">把「取水、洗澡、洗衣」三件事收进一个 App。\n\n三个服务互相独立，用哪个就登哪个，不用来回切换账号。</string>
+    <string name="onboard_t2">三个服务，各自登录</string>
+    <string name="onboard_d2">取水用慧生活798账号，洗澡用胖乖生活账号，洗衣直接跳转智慧笑联小程序。\n\n登录状态各自记在手机上，不会互相影响。</string>
+    <string name="onboard_t3">第一次扫码，之后就一键</string>
+    <string name="onboard_d3">第一次用某台设备时扫一下机身上的二维码，App 会记住它，并让你起个名字。\n\n以后打开就能直接点，不用再扫码。设备多了还能分组和置顶。</string>
+    <string name="onboard_t4">关于隐私与边界</string>
+    <string name="onboard_d4">账号、密码、设备清单只保存在你自己的手机本地，不会上传到任何服务器。\n\n本应用是基于官方接口的互操作性独立实现，不含任何原应用的代码或资源，仅供校内同学个人使用。</string>
+
+    <!-- 洗澡：未结束的订单保护 -->
+    <string name="shower_pending_title">有一笔未结束的订单</string>
+    <string name="shower_pending_running">洗澡进行中</string>
+    <string name="shower_pending_info">订单号 %1$s\n设备 %2$s\n下单时间 %3$s\n\n这笔订单还挂在你的账号下。不处理的话，服务端可能按最长时长结算，所以要么结束它，要么撤销它。</string>
+    <string name="shower_pending_running_info">订单号 %1$s\n设备 %2$s\n开始时间 %3$s\n\n洗完请点下面的「结束」结算。直接离开的话，机器可能会一直计时。</string>
+    <string name="btn_pending_end">结束这一单（结算已用的时间）</string>
+    <string name="btn_pending_cancel">撤销这一单（未开始则不扣费）</string>
+    <string name="shower_pending_no_order">订单已创建但还没拿到订单号</string>
+    <string name="shower_busy">这台设备上已经有一笔进行中的订单（%1$s）。\n先处理它再开新的，否则会重复扣费。</string>
+    <string name="shower_checking">正在检查这台设备有没有在途订单…</string>
+    <string name="shower_order_created">订单已创建（%1$s），正在解锁…</string>
+    <string name="shower_recover_ok">出问题了，但已自动撤销订单 %1$s，不会产生扣费。</string>
+    <string name="shower_recover_end_ok">解锁没成功，已改为结束订单 %1$s。</string>
+    <string name="shower_recover_fail">解锁失败，而且自动撤销也失败：%1$s\n\n订单号 %2$s，请到胖乖生活「我的订单」里手动处理。</string>
+    <string name="shower_ended_ok">已结束订单 %1$s。</string>
+    <string name="shower_cancelled_ok">已撤销订单 %1$s。</string>
+    <string name="shower_end_need_order">还没拿到订单号，无法结束。先在设备上按停止，再到胖乖生活里确认订单。</string>
+
+    <string name="settings_pay_nag">恢复免密支付提示</string>
+    <string name="settings_pay_nag_sub">如果你点过「不再提示」，点这里重新打开提醒</string>
+
+    <string name="settings_widget">桌面小组件</string>
+    <string name="widget_style_dark">深色（默认）</string>
+    <string name="widget_style_light">浅色</string>
+    <string name="widget_style_glass">柔光玻璃</string>
+    <string name="settings_widget_hint">先把它添加到桌面（长按桌面 → 小组件 → 趵突泉之光），再回来改样式，改完立刻生效。\n\n说明：小组件跟不了 App 内的深色模式 —— 桌面是独立进程，只认系统配置。所以这里给了固定样式让你自己挑。\n\n「柔光玻璃」是半透明奶白模拟的磨砂效果，Android 不允许小组件真模糊背景。</string>
+
+    <!-- 支付诊断（只读） -->
+
+    <!-- 支付方式 -->
+    <string name="label_pay_type">支付方式</string>
+    <string name="pay_type_unknown">查设备后显示</string>
+    <string name="pay_type_pick">选择支付方式</string>
+    <string name="pay_type_none">这台设备没有返回可用的支付方式，已默认用「支付宝」。\n\n下单前请先确认支付宝里有钱，否则这一单可能变成「待支付」。</string>
+    <string name="pay_type_hint">这是官方接口返回的、这台机器支持的渠道。切换只影响本次下单要用的渠道。</string>
+
+
+    <string name="orders_title">我的订单</string>
+    <string name="orders_refresh">刷新</string>
+    <string name="orders_close">关闭</string>
+    <string name="orders_raw">复制原始返回</string>
+    <string name="orders_entry">我的订单（看未支付的）</string>
+
+    <string name="scan_torch_off">开灯</string>
+    <string name="scan_torch_on">关灯</string>
+    <string name="scan_no_flash">这台设备没有闪光灯，无法补光</string>
+    <string name="scan_hint_all_formats">已放宽到全部码制。把码放进取景框，或开灯补光</string>
+
+    <string name="ml_title">按列表添加</string>
+    <string name="ml_reload">重试</string>
+    <string name="ml_type">类型：…</string>
+    <string name="ml_building">楼栋：…</string>
+    <string name="ml_loading">正在加载…</string>
+    <string name="devices_add_from_list">从列表添加（不用扫码）</string>
+
+    <string name="occupy_unknown">状态未知</string>
+    <string name="occupy_idle">● 空闲</string>
+    <string name="occupy_busy">● 使用中</string>
+    <string name="floor_free_title">%1$s还有 %2$d 台空闲，点一下就能换过去</string>
+    <string name="floor_none_free">%1$s没有其它空闲机器</string>
+    <string name="shower_menu_manual">手动输入编号 / 扫码</string>
+    <string name="shower_menu_orders">我的订单</string>
+    <string name="shower_menu_paytype">支付方式</string>
+    <string name="shower_menu_logout">退出登录</string>
+    <string name="shower_menu_refresh">刷新设备状态</string>
+    <string name="shower_busy_blocked">这台（%1$s）现在有人在用。\n\n下面是同层还空着的，可以换一台。</string>
+
+    <!-- 洗澡设备选择（先选楼号，再按层列出） -->
+    <string name="picker_title">选择洗澡设备</string>
+    <string name="picker_refresh">刷新</string>
+    <string name="picker_loading">正在拉取楼号…</string>
+    <string name="picker_loading_machines">正在拉取机器…</string>
+    <string name="picker_need_login">要先登录胖乖生活账号。</string>
+    <string name="picker_no_buildings">没拉到楼号。点「刷新」重试。</string>
+    <string name="picker_no_machines">%1$s 下没有淋浴机器。</string>
+    <string name="picker_summary">%1$s：共 %2$d 台，其中 %3$d 台空闲</string>
+    <string name="picker_busy_warn">%1$s 现在有人在用，确定要选它吗？</string>
+
+    <!-- 取水设备选择（按站点分组） -->
+    <string name="picker_need_login_water">要先登录慧生活798账号。</string>
+    <string name="water_picker_summary">共 %1$d 台收藏设备，%2$d 台空闲，分属 %3$d 个站点</string>
+    <string name="water_picker_empty">名单是空的。\n\n取水这边没有「列出整栋楼所有机器」的接口，名单来自你在官方「慧生活798」里**收藏**过的设备。\n\n点右上「扫码收藏」扫一台饮水机的码 —— 扫到会自动收藏到你的官方账号，并直接选中用起来，以后它就在这个名单里了。</string>
+    <string name="water_scan_fav">扫码收藏</string>
+    <string name="water_fav_ok">已收藏到官方账号，以后就在名单里了</string>
+    <string name="water_fav_fail">收藏失败：%1$s\n\n（不影响使用，这台设备已经选中了；也可以在官方 App 里手动关注它）</string>
+    <string name="water_fav_scan_hint">扫饮水机上的二维码。取水的码是印上去的标准二维码，扫得出来。</string>
+    <string name="water_scan_bad">没认出这台设备。\n\n扫到的内容：\n%1$s\n\n（把这段发给开发者，我来加解析规则）</string>
+
+    <!-- 登录过期 -->
+    <string name="token_expired_title">登录已过期</string>
+    <string name="token_expired_water">慧生活798 的登录状态过期了，重新登录一下就能继续取水。</string>
+    <string name="token_expired_shower">胖乖生活的登录状态过期了，重新登录一下就能继续洗澡。</string>
+    <string name="token_relogin">立即重新登录</string>
+    <string name="token_later">稍后</string>
+
+    <!-- 设备排序 / 置顶 -->
+    <string name="devices_pin">置顶</string>
+    <string name="devices_unpin">取消置顶</string>
+    <string name="devices_sort">排序</string>
+    <string name="devices_sort_recent">最近使用</string>
+    <string name="devices_sort_name">按名称</string>
+    <string name="devices_sort_manual">手动排序</string>
+    <string name="devices_sort_hint">当前：%1$s。长按设备可拖动排序。</string>
+    <string name="devices_move_up">上移</string>
+    <string name="devices_move_down">下移</string>
+    <string name="devices_move_edge">已经到头了</string>
+    <string name="devices_drag_hint">拖到目标位置松手即可排序</string>
+    <string name="devices_pinned">已置顶</string>
+
+    <!-- 桌面小组件 -->
+    <string name="widget_label">趵突泉之光</string>
+    <string name="widget_desc">一键打开取水 / 洗澡 / 洗衣</string>
+    <string name="widget_water">取水</string>
+    <string name="widget_shower">洗澡</string>
+    <string name="widget_laundry">洗衣</string>
+</resources>

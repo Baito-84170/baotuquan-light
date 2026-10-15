@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="28dp"
+    android:paddingBottom="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:text="@string/orders_title" />
+
+        <Button
+            android:id="@+id/btnOrderRefresh"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            style="@style/BtnOutline"
+            android:textSize="13sp"
+            android:text="@string/orders_refresh" />
+
+        <Button
+            android:id="@+id/btnOrderRaw"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            style="@style/BtnOutline"
+            android:textSize="13sp"
+            android:text="@string/orders_raw" />
+
+        <Button
+            android:id="@+id/orderClose"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            style="@style/BtnGhost"
+            android:textSize="13sp"
+            android:text="@string/orders_close" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/orderSummary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_sub" />
+
+    <TextView
+        android:id="@+id/orderEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:textSize="12sp"
+        android:lineSpacingExtra="3dp"
+        android:textIsSelectable="true"
+        android:textColor="@color/text_sub"
+        android:visibility="gone" />
+
+    <ListView
+        android:id="@+id/orderList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_card"
+        android:divider="@color/divider"
+        android:dividerHeight="1dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp" />
+</LinearLayout>

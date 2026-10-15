@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="40dp"
+        android:paddingBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:letterSpacing="-0.01" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/login_sub"
+            android:textSize="13sp"
+            android:textColor="@color/text_sub" />
+
+        <!-- 表单卡片 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:elevation="1dp"
+            android:padding="18dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:text="@string/label_phone"
+                style="@style/FieldLabel" />
+
+            <EditText
+                android:id="@+id/phone"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                style="@style/Input"
+                android:hint="@string/hint_phone"
+                android:inputType="phone"
+                android:maxLength="11" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_captcha"
+                style="@style/FieldLabel" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <EditText
+                    android:id="@+id/captchaCode"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    style="@style/Input"
+                    android:hint="@string/hint_captcha"
+                    android:inputType="text"
+                    android:maxLength="6" />
+
+                <ImageView
+                    android:id="@+id/captchaImg"
+                    android:layout_width="106dp"
+                    android:layout_height="46dp"
+                    android:layout_marginStart="10dp"
+                    android:scaleType="fitXY"
+                    android:background="@drawable/bg_input"
+                    android:contentDescription="@string/label_captcha" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnRefresh"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_gravity="end"
+                android:layout_marginTop="2dp"
+                android:minWidth="0dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                style="@style/BtnGhost"
+                android:textSize="12sp"
+                android:text="@string/btn_refresh_captcha" />
+
+            <Button
+                android:id="@+id/btnGetSms"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                style="@style/BtnOutline"
+                android:text="@string/btn_get_sms" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_sms"
+                style="@style/FieldLabel" />
+
+            <EditText
+                android:id="@+id/smsCode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                style="@style/Input"
+                android:hint="@string/hint_sms"
+                android:inputType="number"
+                android:maxLength="8" />
+
+            <Button
+                android:id="@+id/btnLogin"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="22dp"
+                style="@style/BtnPrimary"
+                android:text="@string/btn_login" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:paddingStart="2dp"
+            android:textSize="13sp"
+            android:textColor="@color/text_sub" />
+    </LinearLayout>
+</ScrollView>

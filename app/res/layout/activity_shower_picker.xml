@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="28dp"
+    android:paddingBottom="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="23sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:text="@string/picker_title" />
+
+        <Button
+            android:id="@+id/pkScanFav"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            style="@style/BtnGhost"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:text="@string/water_scan_fav" />
+
+        <Button
+            android:id="@+id/pkRefresh"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            style="@style/BtnOutline"
+            android:textSize="13sp"
+            android:text="@string/picker_refresh" />
+
+        <Button
+            android:id="@+id/pkClose"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            style="@style/BtnGhost"
+            android:textSize="13sp"
+            android:text="@string/orders_close" />
+    </LinearLayout>
+
+    <!-- 楼号 -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/pkBuildings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/pkStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_sub"
+        android:text="@string/picker_loading" />
+
+    <ListView
+        android:id="@+id/pkList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_card"
+        android:divider="@null"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp" />
+</LinearLayout>

@@ -1,0 +1,21 @@
+# 构建产物
+build/
+app/build/
+app/gen/
+*.apk
+*.idsig
+
+# 签名密钥与口令
+keystore.jks
+keystore.pass
+*.jks
+*.keystore
+
+# 杂项
+*.log
+*.dex
+*.class
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

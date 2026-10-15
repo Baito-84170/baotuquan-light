@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  桌面小组件：三个「胶囊」，每个是 emoji + 文字，横向排列。
+
+  为什么是横排而不是上下叠：
+  1 行小组件的可用高度只有 40~60dp，emoji 上面再压一行文字会挤到变形；
+  横排能利用宽度，在同样的高度下更舒展。
+  根布局和胶囊都是 match_parent + weight，所以拉高/拉宽（已开启双向 resize）也不会崩。
+
+  配色不写在这里 —— 由 WidgetProvider 按用户在设置里选的样式动态套，
+  见 widget_bg.xml 里的说明（小组件跟不上主题，只能自己给一套）。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center"
+    android:background="@drawable/widget_bg"
+    android:padding="7dp">
+
+    <LinearLayout
+        android:id="@+id/widgetWater"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginEnd="6dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/widget_btn">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="17sp"
+            android:text="💧" />
+
+        <TextView
+            android:id="@+id/widgetWaterLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.04"
+            android:textColor="#FFEAF2FF"
+            android:text="@string/widget_water" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widgetShower"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginEnd="6dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/widget_btn">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="17sp"
+            android:text="🚿" />
+
+        <TextView
+            android:id="@+id/widgetShowerLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.04"
+            android:textColor="#FFEAF2FF"
+            android:text="@string/widget_shower" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widgetLaundry"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/widget_btn">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="17sp"
+            android:text="🧺" />
+
+        <TextView
+            android:id="@+id/widgetLaundryLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.04"
+            android:textColor="#FFEAF2FF"
+            android:text="@string/widget_laundry" />
+    </LinearLayout>
+</LinearLayout>

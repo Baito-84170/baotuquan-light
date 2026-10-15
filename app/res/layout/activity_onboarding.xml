@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg"
+    android:paddingStart="28dp"
+    android:paddingEnd="28dp"
+    android:paddingTop="40dp"
+    android:paddingBottom="28dp">
+
+    <!-- 跳过 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/onboardSkip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:textSize="14sp"
+            android:textColor="@color/text_hint"
+            android:text="@string/onboard_skip" />
+    </LinearLayout>
+
+    <!-- 图形 -->
+    <TextView
+        android:id="@+id/onboardGlyph"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:textSize="76sp"
+        android:text="💧" />
+
+    <!-- 文案 -->
+    <TextView
+        android:id="@+id/onboardTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/text"
+        android:text="@string/onboard_t1" />
+
+    <TextView
+        android:id="@+id/onboardDesc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:gravity="center"
+        android:textSize="14sp"
+        android:lineSpacingExtra="5dp"
+        android:textColor="@color/text_sub"
+        android:text="@string/onboard_d1" />
+
+    <!-- 进度点 -->
+    <LinearLayout
+        android:id="@+id/onboardDots"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:gravity="center"
+        android:orientation="horizontal" />
+
+    <!-- 按钮 -->
+    <Button
+        android:id="@+id/onboardNext"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="22dp"
+        style="@style/BtnPrimary"
+        android:text="@string/onboard_next" />
+</LinearLayout>

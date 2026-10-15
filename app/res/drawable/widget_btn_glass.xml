@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 玻璃样式的胶囊：比卡片再实一点点的白，配一条柔和高光边 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#402F6BFF">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="270"
+                android:startColor="#59FFFFFF"
+                android:endColor="#26FFFFFF" />
+            <corners android:radius="17dp" />
+            <stroke android:width="1dp" android:color="#59FFFFFF" />
+        </shape>
+    </item>
+</ripple>
