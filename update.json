@@ -1,7 +1,7 @@
 {
-    "versionCode":  48,
-    "versionName":  "7.10",
-    "notes":  "**修复：洗澡订单没有结算，导致洗完一次之后就再也开不了门。**\n\n胖乖生活是**先用后付** —— 门开了、洗完了才结算。之前的流程是\n`下单 → 开门 → 洗 → 关门`，**少了最后那一步付款**，于是每洗一次就留一笔未支付订单，\n攒到后面服务端用 `code 2128`（有未支付订单需要完成）把所有新订单都堵死。\n\n更坑的是报错很误导：真正的 `2128` 出现在 `/goods/normal/skus` 上，而后续的\n`/trade/preview` 只回 `code -1` 且 `msg` 为 `null`，界面上只能看到一句没头没脑的\n\"订单预览失败\"。\n\n现在：\n\n- 结束洗澡后自动调 `/pay/unify/prePay` 并**跳转支付宝**完成付款\n- 检测到 `2128` 时明确提示「有未支付订单」，并给出补付入口\n- 跳转失败可以一键打开官方 App 兜底，不会卡死\n- **免密支付暂时无法使用**，会走普通支付宝支付\n\n> ⚠️ **上个版本用过洗澡的同学**：请检查自己有没有卡住未支付的订单 ——\n> 打开「洗澡」页会直接提示，付掉之后才能继续用水。\n\n另外新增：**升级后第一次打开会弹出「这次更新了什么」**，跨版本升级会把中间每个版本的变更都列出来。\n\n\n> 跳转支付的做法：`prepayParam` 实测是一串支付宝 orderString，塞进\n> `alipays://platformapi/startapp?appId=20000125&orderSuffix=…` 即可唤起支付宝。\n> 这样就不必集成支付宝 SDK。",
+    "versionCode":  49,
+    "versionName":  "7.10.1",
+    "notes":  "**换了个更快的更新源。**\n\n- **自建更新镜像**：App 内检查和下载新版本不再直连 GitHub（国内很慢），改走自建的\n  HTTPS 镜像；镜像取不到时自动退回 GitHub Releases。\n- 镜像内容由 Releases 自动同步，版本信息仍以发布页为准。\n\n**iOS 端（Scriptable）同步更新：**\n\n- 补上了洗澡订单的**结算付款**。iOS 版之前和 Android 7.9 之前是同一个毛病 ——\n  只发 `remoteEnd` 就收尾，账没结，每次洗澡留一笔未支付订单，攒到被 `code 2128` 堵死。\n- 被 `2128` 拦住时直接给出「去付款」入口，不再只报一句没头没脑的「预览失败」。\n- 新增 **「💰 支付这一单」** 可随时补付在途订单；付完可回查 `/order/pay_status` 确认到账。\n- 新增 **iOS 使用教程** → <https://github.com/Baito-84170/baotuquan-light/blob/main/ios/README.md>",
     "apkUrl":  "https://github.com/Baito-84170/baotuquan-light/releases/latest/download/baotuquan-light.apk",
     "page":  "https://github.com/Baito-84170/baotuquan-light/releases/latest"
 }

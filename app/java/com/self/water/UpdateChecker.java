@@ -2,6 +2,7 @@ package com.self.water;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -20,6 +21,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -80,6 +83,9 @@ public final class UpdateChecker {
      * jsDelivr 或 API 兜底。
      */
     private static final String[] MIRRORS = {
+            // 自建镜像：同一个 WiFi / 国内直连都很快，自签证书已在
+            // network_security_config 里固定。挂了会自动退回下面两个。
+            "https://120.27.236.74:8443/baotuquan/update.json",
             "https://raw.githubusercontent.com/" + REPO + "/main/update.json",
             "https://cdn.jsdelivr.net/gh/" + REPO + "@main/update.json",
     };
@@ -100,6 +106,8 @@ public final class UpdateChecker {
         public String notes = "";
         public String apkUrl = "";
         public String apkName = APK_ASSET;
+        /** 备用下载地址（GitHub）。自建镜像只求快，挂了就退回这里。 */
+        public String apkFallback = "";
         public String page = RELEASES_PAGE;
     }
 
@@ -241,6 +249,7 @@ public final class UpdateChecker {
         String apk = j.optString("apkUrl", "");
         info.apkUrl = apk.length() == 0 ? APK_LATEST_URL : apk;
         info.apkName = APK_ASSET;
+        info.apkFallback = APK_LATEST_URL;
         info.page = j.optString("page", RELEASES_PAGE);
         return info;
     }
@@ -295,6 +304,7 @@ public final class UpdateChecker {
         }
         info.apkUrl = fallback;
         info.apkName = fallbackName;
+        info.apkFallback = "";
 
         int marker = markerCode(notes);
         if (marker > 0) {
@@ -475,80 +485,148 @@ public final class UpdateChecker {
     // ---------------------------------------------------- 下载并安装
 
     /**
-     * 下载 APK 并在下载完成后拉起系统安装界面。
+     * 下载 APK 并拉起系统安装界面。
      *
-     * 落盘位置按 API 分两路，**都不需要申请存储权限**：
-     *   - API 29+   → 公共下载目录（DownloadManager 是系统下载器，不受分区存储限制）
-     *   - API 24~28 → 应用自己的外部目录
-     * 万一哪一步不成（比如没给「安装未知应用」权限），就退回浏览器打开 Release 页。
+     * 这里**不再用系统的 DownloadManager**：APK 来自自建镜像、用的是自签证书，
+     * 而 DownloadManager 是**系统服务**，不认我们 App 的
+     * network_security_config —— 自签证书在它那里必然失败。这是方案 B 绕不开的一步。
+     *
+     * 所以自己下：HttpURLConnection → App 私有外部目录 → FileProvider → 安装意图。
+     * 文件只有几百 KB、用户就在前台等着，用不着断点续传，也用不着后台下载。
+     *
+     * 主源挂了会自动退回 GitHub Releases —— 自建镜像只求「快」，不是唯一来源。
      */
-    public static void downloadAndInstall(Context ctx, Info info) {
-        final Context c = ctx.getApplicationContext();
-        DownloadManager dm = (DownloadManager) c.getSystemService(Context.DOWNLOAD_SERVICE);
-        if (dm == null) {
-            openPage(c, info);
-            return;
-        }
+    public static void downloadAndInstall(final Activity a, final Info info) {
+        final ProgressDialog pd = new ProgressDialog(a);
+        pd.setMessage("正在下载更新…");
+        pd.setCancelable(false);
         try {
-            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(info.apkUrl));
-            req.setTitle("趵突泉之光 " + info.name);
-            req.setDescription("正在下载更新…");
-            req.setMimeType("application/vnd.android.package-archive");
-            req.setNotificationVisibility(
-                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            String file = info.apkName.length() == 0 ? APK_ASSET : info.apkName;
-            if (Build.VERSION.SDK_INT >= 29) {
-                req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, file);
-            } else {
-                req.setDestinationInExternalFilesDir(c, Environment.DIRECTORY_DOWNLOADS, file);
-            }
-            watch(c, dm, dm.enqueue(req), info);
-        } catch (Exception e) {
-            openPage(c, info);
+            pd.show();
+        } catch (Exception ignored) {
         }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                File apk = null;
+                String err = null;
+                String[] urls = {info.apkUrl, info.apkFallback};
+                for (String url : urls) {
+                    if (url == null || url.length() == 0) {
+                        continue;
+                    }
+                    try {
+                        apk = fetch(a, url);
+                        break;
+                    } catch (Exception e) {
+                        err = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    }
+                }
+
+                final File file = apk;
+                final String fail = err;
+                new Handler(Looper.getMainLooper()).post(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            pd.dismiss();
+                        } catch (Exception ignored) {
+                        }
+                        if (a.isFinishing()) {
+                            return;
+                        }
+                        if (file == null) {
+                            Toast.makeText(a, "下载失败：" + fail + "\n可以打开发布页手动下载",
+                                    Toast.LENGTH_LONG).show();
+                            openPage(a, info);
+                            return;
+                        }
+                        install(a, file, info);
+                    }
+                });
+            }
+        }).start();
     }
 
-    private static void watch(final Context c, final DownloadManager dm,
-                              final long id, final Info info) {
-        final BroadcastReceiver[] holder = new BroadcastReceiver[1];
-        BroadcastReceiver r = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context ctx, Intent it) {
-                if (it.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) != id) {
-                    return;
-                }
+    /** 先写 .part，下完再改名 —— 免得半个文件被当成完整 APK 交出去。 */
+    private static File fetch(Context c, String url) throws Exception {
+        HttpURLConnection conn = null;
+        InputStream in = null;
+        FileOutputStream out = null;
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(30000);
+            conn.setInstanceFollowRedirects(true);
+            conn.setRequestProperty("User-Agent", "baotuquan-light/" + installedName(c));
+
+            int http = conn.getResponseCode();
+            if (http != 200) {
+                throw new Exception("HTTP " + http);
+            }
+
+            File dst = new File(SimpleFileProvider.dir(c), APK_ASSET);
+            File tmp = new File(dst.getParentFile(), APK_ASSET + ".part");
+            in = conn.getInputStream();
+            out = new FileOutputStream(tmp);
+            byte[] buf = new byte[16384];
+            int n;
+            long total = 0;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+                total += n;
+            }
+            out.flush();
+            out.close();
+            out = null;
+            in.close();
+            in = null;
+
+            // 太小肯定不是 APK（多半拿到的是错误页）
+            if (total < 1024) {
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+                throw new Exception("内容异常（" + total + " 字节）");
+            }
+            if (dst.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                dst.delete();
+            }
+            if (!tmp.renameTo(dst)) {
+                throw new Exception("保存失败");
+            }
+            return dst;
+        } finally {
+            if (out != null) {
                 try {
-                    c.unregisterReceiver(holder[0]);
+                    out.close();
                 } catch (Exception ignored) {
                 }
-                install(c, dm, id, info);
             }
-        };
-        holder[0] = r;
-        try {
-            // ACTION_DOWNLOAD_COMPLETE 是系统广播，不受 Android 14 注册标志新规影响
-            c.registerReceiver(r, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
-        } catch (Exception ignored) {
-            // 注册不上也没关系：DownloadManager 自己的通知点一下也能装
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Exception ignored) {
+                }
+            }
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
-    private static void install(Context c, DownloadManager dm, long id, Info info) {
-        Uri uri = dm.getUriForDownloadedFile(id);
-        if (uri == null) {
-            openPage(c, info);
-            return;
-        }
+    private static void install(Context c, File apk, Info info) {
         Intent i = new Intent(Intent.ACTION_VIEW);
-        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.setDataAndType(SimpleFileProvider.uriFor(apk),
+                "application/vnd.android.package-archive");
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             c.startActivity(i);
         } catch (Exception e) {
+            Toast.makeText(c, "打不开安装界面，可以去发布页手动下载", Toast.LENGTH_LONG).show();
             openPage(c, info);
         }
     }
-
     /** 跳到系统设置里给我们开「安装未知应用」。 */
     public static void openInstallSettings(Activity a) {
         try {

@@ -4,6 +4,13 @@
 //
 //  用法：装 Scriptable → 新建脚本 → 粘贴本文件 → 运行
 //       可长按脚本「添加到主屏幕」，像 App 一样使用
+//
+//  版本 7.10.1 ｜ 2026-10-16
+//   · 补上洗澡订单的「结算付款」。胖乖生活是先开门、洗完才结算，
+//     旧版只发 remoteEnd 就收尾，账没结 —— 每次洗澡留一笔未支付订单，
+//     攒到服务端用 code 2128 把下一次下单整个堵死（报错还伪装成「预览失败」）。
+//   · 被 code 2128 拦住时，直接给出「去付款」入口。
+//   · 新增「支付这一单」：结束完自动跳转支付宝，可回查是否付成功。
 // ===============================================================
 
 // ---------------------------------------------------------------
@@ -107,6 +114,14 @@ const LAUNDRY_PAGE =
   '&page=pages%2Fdevice%2Fwashing%2Findex%3F__id__%3D6' +
   '%26query%3D%25257B%252522deviceType%252522%25253A4%25257D' +
   '%26__appxPageId%3D14';
+
+// 洗澡的位置 —— 风控签名要带经纬度。趵突泉校区。
+const PG_LAT = '36.651077673510976';
+const PG_LNG = '117.05471881019238';
+
+// 支付宝「跳转支付」的官方入口，不需要集成 SDK 就能唤起收银台。
+const ALIPAY_ORDER_SCHEME =
+  'alipays://platformapi/startapp?appId=20000125&orderSuffix=';
 
 // ---------------------------------------------------------------
 // 3. 本地存储
@@ -506,6 +521,16 @@ async function pgResolve(db, sn) {
   if (!dd) { throw new Error('查询设备失败：' + ((det.json && det.json.msg) || det.text)); }
 
   const sku = await pgPost('/goods/normal/skus', { goodsId: sd.id }, token, null);
+  if (pgIsUnpaidBlock(sku)) {
+    // 被拦时 data 是个**对象**（带 incompleteOrderId）而不是数组，取不到 skuId。
+    // 继续走下去只会从 /trade/preview 拿到 code -1 + msg null，界面上就是一句
+    // 没头没脑的「预览失败」。所以在这里就把订单号抛出去。
+    const e = new Error('有未支付订单需要完成');
+    e.isUnpaid = true;
+    e.unpaidOrderId = pgIncompleteOrderId(sku);
+    e.partial = { sn: dd.imei, categoryCode: sd.categoryCode, goodsId: sd.id };
+    throw e;
+  }
   const skus = sku.json && sku.json.data;
   const s0 = (skus && skus.length) ? skus[0] : {};
 
@@ -556,8 +581,10 @@ async function showerMenu(db) {
       { label: '📱  切换设备', sub: devicesOf(db, 'shower').length + ' 台已记住', value: 'devices' },
     ];
     if (db.pending) {
-      items.unshift({ label: '✅  结束这一单', sub: '订单 ' + (db.pending.orderNo || db.pending.orderId), value: 'endpending' });
-      if (!db.pending.orderNo) {
+      items.unshift({ label: '✅  结束这一单', sub: '结束完会自动跳去付款', value: 'endpending' });
+      if (db.pending.orderNo) {
+        items.splice(1, 0, { label: '💰  支付这一单', sub: '不付掉会挡住下一次洗澡', value: 'paypending' });
+      } else {
         items.splice(1, 0, { label: '↩️  撤销这一单', sub: '还没拿到订单号，只能撤销', value: 'cancelpending' });
       }
       items.unshift({ label: '⚠️  有一笔未结束的订单', sub: (db.pending.orderNo || db.pending.orderId), value: 'noop' });
@@ -576,6 +603,9 @@ async function showerMenu(db) {
       // 只是提示行，什么都不做
     } else if (pick === 'endpending') {
       await showerEndPending(db);
+    } else if (pick === 'paypending') {
+      await pgSettle(db, db.pending.orderNo,
+        db.pending.payType || db.payType || PAY_ALIPAY, pgRiskOf(db.pending));
     } else if (pick === 'cancelpending') {
       await showerCancelPending(db);
     } else if (pick === 'paytype') {
@@ -697,7 +727,154 @@ async function pgEndShower(goodsId, orderNo, token) {
   return pgPost('/shower/goods/remoteEnd', { goodsId: goodsId, orderNo: orderNo }, token, null);
 }
 
-/** 结束这一单（按已用时长结算） */
+// ---------------------------------------------------------------
+// 7.6 付款 —— 先用后付，结算发生在 remoteEnd 之后
+// ---------------------------------------------------------------
+// 胖乖生活是先开门、洗完才结算。官方顺序：
+//
+//     remoteEnd → order/afterPay/creating → payChannelRoute/againPay
+//              → pay/unify/prePay{orderNo,payType} → 拉起支付
+//
+// 旧版脚本只走到 remoteEnd 就收尾了 —— 门关了、账没结。每次洗澡都留一笔
+// 未支付订单，攒到服务端用 code 2128（有未支付订单需要完成）把下一次下单
+// 整个堵死；而且报错发生在 /trade/preview 上、只回一句 code -1 且 msg 为
+// null，界面上看着就是莫名其妙的「订单预览失败」。
+//
+// 不集成支付宝 SDK（iOS 上是一堆 .ipa 之外的东西），改走「跳转支付」：
+// prepayParam 实测是一串支付宝 orderString，塞进 alipays://…&orderSuffix=
+// 就能唤起支付宝收银台。
+//
+// 任何一步失败都有兜底：让用户去官方 App 付款，至少不会卡死。
+
+async function pgPrePay(orderNo, payType, token, risk) {
+  return pgPost('/pay/unify/prePay', {
+    orderNo: orderNo || '',
+    payType: String(payType),
+  }, token, risk);
+}
+
+/** 查这笔订单是否已支付（data 是 boolean）。 */
+async function pgPayStatus(orderNo, payType, token) {
+  return pgPost('/order/pay_status', {
+    orderNo: orderNo || '',
+    payType: String(payType),
+  }, token, null);
+}
+
+/** 取 data.prepayParam —— 交给支付渠道处理的串。 */
+function pgPickPrepayParam(r) {
+  const d = (r && r.json && r.json.data) || {};
+  return d.prepayParam || '';
+}
+
+/** 是不是「有未支付订单」的拦截。 */
+function pgIsUnpaidBlock(r) {
+  return !!(r && r.json && r.json.code === 2128);
+}
+
+/** code 2128 时，服务端会带回堵住的那笔订单号 —— 这是继续下单的唯一出路。 */
+function pgIncompleteOrderId(r) {
+  if (!pgIsUnpaidBlock(r)) { return ''; }
+  const d = r.json.data || {};
+  return d.incompleteOrderId || d.incompleteOrderNo || '';
+}
+
+/** 从 pending 记录还原风控参数（付款和解锁必须带同一套）。 */
+function pgRiskOf(p) {
+  return {
+    imei: (p && p.sn) || '',
+    categoryCode: (p && p.categoryCode) || '',
+    lat: PG_LAT,
+    lng: PG_LNG,
+  };
+}
+
+/**
+ * 跳去付款。
+ * prepayParam 有三种可能形态，按代价从低到高依次试：
+ *   1. 本身就是 scheme / 网址；
+ *   2. 支付宝 orderString → 用官方 scheme 唤醒支付宝（实测可用）；
+ *   3. 退到官方网关，交给支付宝页面处理。
+ */
+async function pgJumpPay(payType, param) {
+  const p = (param || '').trim();
+
+  if (String(payType) === '2') {
+    await info('余额支付要在官方 App 里完成',
+      '钱包余额支付没法从脚本唤起。\n\n请打开官方「胖乖生活」App 把这笔结掉。');
+    return false;
+  }
+  if (!p) {
+    await info('没拿到支付参数',
+      '服务端没返回 prepayParam。\n请打开官方「胖乖生活」App 把这笔结掉。');
+    return false;
+  }
+
+  const tries = [];
+  if (/^(alipays|alipayqr):\/\//.test(p) || /^https?:\/\//.test(p)) { tries.push(p); }
+  tries.push(ALIPAY_ORDER_SCHEME + encodeURIComponent(p));
+  tries.push('https://openapi.alipay.com/gateway.do?' + p);
+
+  for (const u of tries) {
+    try {
+      Safari.open(u);
+      return true;
+    } catch (e) { /* 换下一个入口 */ }
+  }
+  await info('跳转失败', '三个入口都没能唤起支付宝。\n请打开官方「胖乖生活」App 手动付款。');
+  return false;
+}
+
+/**
+ * 结算一笔订单：先要 prepayParam，再让用户去付；付完可以回查确认。
+ * 这一笔不付掉，它会一直挡着下一次洗澡。
+ */
+async function pgSettle(db, orderNo, payType, risk) {
+  if (!orderNo) { return; }
+  const token = db.tokens.pg;
+
+  const r = await pgPrePay(orderNo, payType, token, risk);
+  const param = pgPickPrepayParam(r);
+  const code = (r.json && r.json.code);
+  const errMsg = r.err ? r.err
+    : (code !== 0
+      ? ('code ' + code + ((r.json && r.json.msg) ? ' · ' + r.json.msg : ''))
+      : '');
+
+  let msg = '订单号：' + orderNo + '\n支付方式：' + pgPayTypeName(db.payTypes, payType);
+  if (errMsg) {
+    msg += '\n\n服务端没给支付参数：' + errMsg +
+      '\n可以直接打开官方「胖乖生活」App 把这笔结掉。';
+  } else {
+    msg += '\n\n点「去付款」会跳到支付宝完成这一笔。\n' +
+      '不付掉的话，它会一直挡着下一次洗澡（服务端 code 2128）。';
+  }
+
+  const a = new Alert();
+  a.title = '有未支付的洗澡订单';
+  a.message = msg;
+  a.addAction('去付款');
+  a.addAction('已付好了，检查一下');
+  a.addCancelAction('稍后');
+  const idx = await a.present();
+
+  if (idx === 0) { await pgJumpPay(payType, param); return; }
+
+  if (idx === 1) {
+    const s = await pgPayStatus(orderNo, payType, token);
+    const paid = !!(s.json && s.json.data === true);
+    if (paid) {
+      if (db.pending && db.pending.orderNo === orderNo) { db.pending = null; saveDB(db); }
+      await info('✅ 已支付', '订单 ' + orderNo + ' 已经结清了。\n下一次洗澡不会被拦。');
+    } else {
+      await info('还没付成功',
+        '服务端说这笔还是未支付。\n\n再点一次「去付款」，' +
+        '或者打开官方「胖乖生活」App 结掉它。');
+    }
+  }
+}
+
+/** 结束这一单（按已用时长结算），结束完立刻结算付款。 */
 async function showerEndPending(db) {
   if (!db.pending) { await info('没有进行中的订单', ''); return; }
   const p = db.pending;
@@ -708,9 +885,50 @@ async function showerEndPending(db) {
   const r = await pgEndShower(p.goodsId, p.orderNo, db.tokens.pg);
   if (r.json && r.json.code === 0) {
     db.pending = null; saveDB(db);
-    await info('已结束', '订单 ' + p.orderNo + ' 已结束。');
+    // 先用后付：门关上了才结算。这一步不做的话这笔订单会一直挂着，
+    // 下一次下单直接被 code 2128 拦住 —— 之前的毛病就在这。
+    await pgSettle(db, p.orderNo, p.payType || db.payType || PAY_ALIPAY, pgRiskOf(p));
   } else {
     await info('结束失败', ((r.json && r.json.msg) || r.text) + '\n订单号 ' + p.orderNo);
+  }
+}
+
+/** 补付一笔未支付的订单（被 2128 拦住、或 pending 里记着的那笔）。 */
+async function showerPayUnpaid(db, orderNo, risk) {
+  const payType = db.payType || pgDefaultPayType(db.payTypes);
+  await pgSettle(db, orderNo, payType, risk);
+}
+
+/**
+ * 服务端 code 2128：上一笔没付，先把它结掉，否则新订单根本下不出来。
+ * 注意被拦时 /goods/normal/skus 返回的 data 是**对象**而不是数组，
+ * 所以 skuId 会取空 —— 走不到后面，只能从这里出去。
+ */
+async function handleUnpaidBlock(db, err) {
+  const orderId = (err && err.unpaidOrderId) || '';
+  const part = (err && err.partial) || {};
+  const risk = {
+    imei: part.sn || '',
+    categoryCode: part.categoryCode || '',
+    lat: PG_LAT,
+    lng: PG_LNG,
+  };
+
+  let msg = '上一笔洗澡订单还没付，服务端把这次拦下来了。\n\n' +
+    (orderId ? '订单号：' + orderId + '\n\n' : '') +
+    '把它付掉之后才能开始新的洗澡。';
+  if (!(db.payTypes || []).some(x => x.type === '15')) {
+    msg += '\n\n（这台机器没有「支付宝免密」渠道。没开免密的话，\n' +
+      '结算时扣不动就会变成「待支付」。免密要在官方「胖乖生活」里开通。）';
+  }
+
+  const a = new Alert();
+  a.title = '有未支付订单';
+  a.message = msg;
+  a.addAction('去付款');
+  a.addAction('稍后');
+  if (await a.present() === 0 && orderId) {
+    await showerPayUnpaid(db, orderId, risk);
   }
 }
 
@@ -743,13 +961,12 @@ async function showerStart(db, sn) {
   try {
     d = await pgResolve(db, sn);
   } catch (e) {
+    if (e && e.isUnpaid) { await handleUnpaidBlock(db, e); return; }
     await info('解析失败', String(e.message || e));
     return;
   }
 
-  const lat = '36.651077673510976';
-  const lng = '117.05471881019238';
-  const risk = { imei: d.sn, categoryCode: d.categoryCode, lat: lat, lng: lng };
+  const risk = { imei: d.sn, categoryCode: d.categoryCode, lat: PG_LAT, lng: PG_LNG };
 
   const prev = await pgPost('/trade/preview/v4', {
     orgId: d.orgId, goodsId: d.goodsId, shopId: d.shopId,
@@ -813,7 +1030,10 @@ async function showerStart(db, sn) {
   }
 
   // 立刻落盘，进程被杀也能在下次打开时提醒收尾
-  db.pending = { orderId: orderId, orderNo: '', goodsId: d.goodsId, at: Date.now() };
+  db.pending = {
+    orderId: orderId, orderNo: '', goodsId: d.goodsId,
+    payType: String(payType), sn: d.sn, categoryCode: d.categoryCode, at: Date.now(),
+  };
   saveDB(db);
 
   let unlock;
@@ -837,13 +1057,19 @@ async function showerStart(db, sn) {
   // orderNo 只有解锁成功后才拿得到，它才是「结束」要回传的那个号
   const ud = unlock.json.data || {};
   const orderNo = String(ud.orderNo || '');
-  db.pending = { orderId: orderId, orderNo: orderNo, goodsId: d.goodsId, at: Date.now() };
+  db.pending = {
+    orderId: orderId, orderNo: orderNo, goodsId: d.goodsId,
+    payType: String(payType), sn: d.sn, categoryCode: d.categoryCode, at: Date.now(),
+  };
   saveDB(db);
 
   if (orderNo) { Pasteboard.copy(orderNo); }
   await info('✅ 已解锁',
     (orderNo ? '订单号已复制到剪贴板：\n' + orderNo + '\n\n' : '') +
-    '洗完记得回「洗澡」菜单点「结束这一单」结算。\n' +
+    '洗完记得回「洗澡」菜单点「结束这一单」——\n' +
+    '结束之后会自动跳到支付宝结算这一笔。\n\n' +
+    '⚠️ 只结束、不付款的话，这笔订单会一直挂着，\n' +
+    '下一次洗澡会被服务端拦住（code 2128）。\n\n' +
     '直接离开的话机器会继续计时。');
 }
 

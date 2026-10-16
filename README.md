@@ -36,6 +36,34 @@
 - 挂代理之后再点下载链接
 - 或者让**已经装好的同学把 APK 直接发给你**（微信 / QQ 传文件都行），效果完全一样
 
+> 💡 **App 内更新现在走自建镜像**，比 GitHub 快很多。上面这个链接仍然指向 GitHub
+> Releases，慢的话也可以在 [Releases](https://github.com/Baito-84170/baotuquan-light/releases) 里挑版本。
+
+---
+
+## 用 iPhone / iPad？
+
+iOS 装不了 APK，但同样能用 —— 走 **Scriptable**（App Store 免费）。
+**不需要 Mac、不需要开发者账号、不需要越狱。**
+
+**三步：**
+
+1. App Store 装 **Scriptable**（作者 Simon B. Støvring，免费）
+2. 打开 [`ios/趵突泉之光.js`](ios/趵突泉之光.js) → 点 **Raw** → 全选复制
+3. 打开 Scriptable → 右上角 `+` 新建脚本 → 全选删掉 → **粘贴** → 改名 `趵突泉之光` → 运行
+
+然后在 Scriptable 里长按脚本卡片选「添加到主屏幕」，点图标直接跑，和 App 一样。
+
+**📖 完整教程（安装、洗澡付款、常见问题）→ [`ios/README.md`](ios/README.md)**
+
+| 项 | Android | iOS（Scriptable） |
+|---|---|---|
+| 安装方式 | 下载 APK 安装 | 装 Scriptable + 粘贴脚本 |
+| 取水 / 洗澡 / 洗衣 | ✅ | ✅ |
+| 图形验证码 | 应用内显示 | 弹出图片预览 |
+| 自动检查更新 | ✅ | ✖（重新复制脚本即为更新） |
+| 桌面小组件 | ✅ | 可用 Scriptable 自己写 |
+
 ---
 
 ## 功能
@@ -59,7 +87,7 @@
 跟随系统 / 始终浅色 / 始终深色。
 
 **自动检查更新**
-启动时自动检查（12 小时最多一次），设置页里也有手动入口；发现新版本会列出更新说明，可直接在应用内下载并安装。更新源就是这个仓库的 Releases。
+启动时自动检查（12 小时最多一次），设置页里也有手动入口；发现新版本会列出更新说明，可直接在应用内下载并安装。更新源是**自建镜像**（快），取不到时自动退回 GitHub Releases；每次升级后第一次打开还会弹「这次更新了什么」。
 
 **其他**
 登录过期自动提示并一键重登、历史订单查询、首次启动引导。
@@ -72,11 +100,13 @@
 baotuquan-light/
 ├── app/                          应用本体
 │   ├── AndroidManifest.xml
-│   ├── java/com/self/water/      26 个 .java
+│   ├── java/com/self/water/      28 个 .java
 │   ├── res/                      布局、颜色、字符串、图标
 │   ├── libs/zxing-core.jar       唯一的第三方依赖（Apache-2.0）
 │   └── build.ps1                 不用 Gradle 的构建脚本
-├── ios/                          iOS 版（Scriptable 脚本）
+├── ios/                          iOS 版（Scriptable）
+│   ├── 趵突泉之光.js              单文件脚本，零依赖
+│   └── README.md                 iOS 使用教程
 ├── update.json                   ← 应用检查更新时读的版本信息
 ├── CHANGELOG.md
 └── README.md
