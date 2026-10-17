@@ -1,7 +1,7 @@
 {
-    "versionCode":  49,
-    "versionName":  "7.10.1",
-    "notes":  "**换了个更快的更新源。**\n\n- **自建更新镜像**：App 内检查和下载新版本不再直连 GitHub（国内很慢），改走自建的\n  HTTPS 镜像；镜像取不到时自动退回 GitHub Releases。\n- 镜像内容由 Releases 自动同步，版本信息仍以发布页为准。\n\n**iOS 端（Scriptable）同步更新：**\n\n- 补上了洗澡订单的**结算付款**。iOS 版之前和 Android 7.9 之前是同一个毛病 ——\n  只发 `remoteEnd` 就收尾，账没结，每次洗澡留一笔未支付订单，攒到被 `code 2128` 堵死。\n- 被 `2128` 拦住时直接给出「去付款」入口，不再只报一句没头没脑的「预览失败」。\n- 新增 **「💰 支付这一单」** 可随时补付在途订单；付完可回查 `/order/pay_status` 确认到账。\n- 新增 **iOS 使用教程** → <https://github.com/Baito-84170/baotuquan-light/blob/main/ios/README.md>",
+    "versionCode":  50,
+    "versionName":  "7.10.2",
+    "notes":  "**修好「取水」的免密支付状态 —— 之前一直判错，而且状态根本拉不到。**\n\n- **枚举用错了（最严重）**：查协议返回的 `type` 用的是 `PGAgreementType`\n  （10 微信 / 20 支付宝 / 40 云闪付），代码却拿 `/dev/start` 的 `ptype`\n  （21 = 支付宝免密）去比 —— pga 枚举里根本没有 21，于是**任何人**都被判成\n  \"未开通\"，会一直弹「建议开通支付宝免密」。枚举是从「慧生活798」原版 APK\n  反编译出来的，不是猜的。\n- **`eid` 缺失**：它只在登录时保存，用旧版本登录过的账号本地是空的，而查协议\n  必须要它 —— 结果请求**根本不发**。现在从设备详情响应里自动补齐，不必重新登录。\n- **切回页面不重查**：去官方 App 开通免密再切回来，看到的还是旧状态。\n  现在每次回到页面都会重查，带 15 秒节流，不会把接口打爆。\n\n已用真实账号在真机上逐项验证：查协议的请求从 0 条变成 1 条、切回页面会重查、\n15 秒内的重复切换被节流、界面上的误报弹窗确认消失。",
     "apkUrl":  "https://github.com/Baito-84170/baotuquan-light/releases/latest/download/baotuquan-light.apk",
     "page":  "https://github.com/Baito-84170/baotuquan-light/releases/latest"
 }

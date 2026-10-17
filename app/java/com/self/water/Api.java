@@ -391,6 +391,48 @@ public final class Api {
         }
     }
 
+    // ---------------------------------------------------- 免密签约（pga）
+    //
+    // ！！注意：`/api/v1/ui/app/pga-check` 返回的 `type` / `status` 用的是
+    // **PGAgreementType / PGAgreementStatus**，和 `/dev/start` 的 `ptype` 不是同一套枚举。
+    // 早期版本拿 ptype 的「21 = 支付宝免密」去比 pga 的 type，而 pga 枚举里只有
+    // 10 / 20 / 40 —— 21 永远不可能命中，于是**所有人**都被判成「未开通免密」，
+    // 一直弹「建议开通支付宝免密支付」。
+    // 枚举原文来自反编译的
+    // com.ilife.lib.coremodel.data.enums.PGAgreement{Type,Status}。
+    public static final int PGA_WECHAT = 10;
+    public static final int PGA_ALIPAY = 20;
+    public static final int PGA_UNIONPAY = 40;
+
+    public static final int PGA_ST_PREPARE = 0;   // 准备申请
+    public static final int PGA_ST_PENDING = 1;   // 审核中（需等待）
+    public static final int PGA_ST_NORMAL = 2;    // 正常
+    public static final int PGA_ST_STOP = 3;      // 暂停
+    public static final int PGA_ST_TEMP = 4;      // 暂时
+
+    public static String pgaTypeName(int t) {
+        switch (t) {
+            case PGA_WECHAT: return "微信";
+            case PGA_ALIPAY: return "支付宝";
+            case PGA_UNIONPAY: return "云闪付";
+            default: return "未知渠道 " + t;
+        }
+    }
+
+    public static String pgaStatusName(int s) {
+        switch (s) {
+            case PGA_ST_PREPARE: return "准备申请";
+            case PGA_ST_PENDING: return "审核中";
+            case PGA_ST_NORMAL: return "正常";
+            case PGA_ST_STOP: return "暂停";
+            case PGA_ST_TEMP: return "暂时";
+            case 5: return "无需签约";
+            case 6: return "按需签约";
+            case 7: return "强制签约";
+            default: return "状态 " + s;
+        }
+    }
+
     /** 从登录返回里取字段。 */
     public static String pick(JSONObject root, String key) {        try {
             JSONObject d = root.optJSONObject("data");

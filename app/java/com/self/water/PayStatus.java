@@ -165,16 +165,43 @@ public final class PayStatus {
         }
         int type = d.optInt("type", -1);
         int status = d.optInt("status", -1);
-        String sign = d.optString("sign", "");
-        // 有协议记录、且 type 是支付宝免密，就算开了
-        if (type == 21 && (status > 0 || sign.length() > 0)) {
-            s.nopwd = YES;
-            s.detail = "免密协议：" + Api.ptypeName(type) + "（status=" + status + "）";
-        } else {
+        String code = d.optString("code", "");
+
+        // 这里比的是 **PGAgreementType**（10 微信 / 20 支付宝 / 40 云闪付），
+        // 不是 /dev/start 用的 ptype（21 支付宝免密 / 91 钱包 …）。
+        // 之前误用 21 去比 —— pga 枚举里根本没有 21，所以**任何人**都会被判成
+        // 「未开通免密」，提示永远弹。真实枚举见 Api.PGA_* 的注释。
+        String typeName = Api.pgaTypeName(type);
+        String statusName = Api.pgaStatusName(status);
+
+        if (type < 0) {
+            s.nopwd = UNKNOWN;
+            s.detail = "服务端没返回签约渠道";
+            return s;
+        }
+        if (type != Api.PGA_ALIPAY) {
             s.nopwd = NO;
-            s.detail = type > 0
-                    ? "当前协议：" + Api.ptypeName(type) + "（status=" + status + "），不是支付宝免密"
-                    : "没有查到免密协议";
+            s.detail = "当前签约渠道是「" + typeName + "」（" + statusName + "），不是支付宝";
+            return s;
+        }
+
+        if (status == Api.PGA_ST_NORMAL) {
+            s.nopwd = YES;
+            s.detail = "支付宝签约正常"
+                    + (code.length() > 0 ? "（协议号 " + code + "）" : "");
+        } else if (status == Api.PGA_ST_PREPARE || status == Api.PGA_ST_PENDING) {
+            s.nopwd = NO;
+            s.detail = "支付宝签约还在生效中（" + statusName + "）";
+        } else if (status == Api.PGA_ST_STOP || status == Api.PGA_ST_TEMP) {
+            s.nopwd = NO;
+            s.detail = "支付宝签约已失效（" + statusName + "），需要重新开通";
+        } else if (status < 0) {
+            s.nopwd = UNKNOWN;
+            s.detail = "服务端没返回签约状态";
+        } else {
+            // 5 无需签约 / 6 按需签约 / 7 强制签约 —— 这几个是策略值，不拿来断言
+            s.nopwd = UNKNOWN;
+            s.detail = "签约状态「" + statusName + "」，无法据此判断是否已开通";
         }
         return s;
     }

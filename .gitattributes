@@ -1,0 +1,44 @@
+# 统一行尾与文本/二进制判定。
+#
+# 之前仓库没有这个文件，而检出端的 core.autocrlf=true —— 于是每次 git add
+# 都会刷一屏 "LF will be replaced by CRLF" 的警告，工作区也在 LF / CRLF 之间反复横跳。
+# 这里一次性定死：仓库里一律 LF。
+#
+# 注意：.ps1 用 LF 在 PowerShell 5.1 / 7 下都正常；真正需要 CRLF 的只有 .bat/.cmd。
+
+* text=auto eol=lf
+
+# ── 二进制：别当文本转换，否则文件会被写坏 ─────────────────────────
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.gif       binary
+*.ico       binary
+*.ttf       binary
+*.woff      binary
+*.woff2     binary
+*.jar       binary
+*.apk       binary
+*.idsig     binary
+*.jks       binary
+*.keystore  binary
+
+# ── 文本：明确 LF ────────────────────────────────────────────────
+*.java        text eol=lf
+*.xml         text eol=lf
+*.ps1         text eol=lf
+*.md          text eol=lf
+*.json        text eol=lf
+*.html        text eol=lf
+*.css         text eol=lf
+*.js          text eol=lf
+*.sh          text eol=lf
+*.pem         text eol=lf
+*.txt         text eol=lf
+.gitignore    text eol=lf
+.gitattributes text eol=lf
+
+# ── Windows 批处理必须 CRLF ──────────────────────────────────────
+*.bat         text eol=crlf
+*.cmd         text eol=crlf

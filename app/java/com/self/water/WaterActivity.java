@@ -36,6 +36,19 @@ public class WaterActivity extends BaseActivity {
     private PayStatus.Status nopwd = new PayStatus.Status();
     private boolean naggedThisVisit;
 
+    /**
+     * 免密状态查询的节流窗口。
+     *
+     * resume 触发得很频繁（切出去看一眼官方 App 再切回来、锁屏解锁…），每次都打一次
+     * 接口既没必要，也容易和设备轮询挤在一起。pga-check 经验证约 0.1 秒，15 秒的窗口
+     * 足够新鲜，又能挡住抖动。
+     */
+    private static final long PAY_STATUS_MIN_INTERVAL_MS = 15_000;
+    private long payStatusAt = 0;
+    private boolean payStatusLoading = false;
+    /** 页面是否在前台 —— 慢网下结果回来时据此丢弃过期结果，避免弹窗迟到。 */
+    private boolean resumed = false;
+
     private static final int REQ_LOGIN = 1;
     private static final int REQ_DEVICE = 2;
 
@@ -105,13 +118,28 @@ public class WaterActivity extends BaseActivity {
     /**
      * 查 798 的免密协议状态并按需提醒。
      *
-     * 每次进入取水页都会走一遍 —— 免密决定结算时能不能自动扣款，
-     * 没开就会留下待支付订单。提示到开通或用户点「不再提示」为止。
+     * 免密决定结算时能不能自动扣款，没开就会留下待支付订单。提示到开通或用户点
+     * 「不再提示」为止。
+     *
+     * 这个查询**必须允许重复触发**：用户看到「建议开通免密」后，很可能直接跳到
+     * 「慧生活798」开通再切回来 —— 只在 onCreate 查一次的话，切回来看到的还是旧结果，
+     * 表现就是「免密状态拉取有延迟」。配套做了三件事：
+     *
+     *   1. 节流 —— 15 秒内不重复查，避免 resume 反复触发时打爆接口；
+     *   2. 去重 —— 同一时刻只允许一个查询在飞，不会出现多个响应互相覆盖；
+     *   3. 前台守卫 —— 结果回来时页面已经不在前台或已销毁，就直接丢弃。
+     *      慢网下这一步很关键：否则弹窗会等你离开页面之后才冒出来。
+     *
+     * @param force true 表示跳过节流（页面首次进入、刚重新登录过）
      */
-    private void refreshPayStatus() {
-        if (!Prefs.loggedIn(this)) {
+    private void refreshPayStatus(boolean force) {
+        if (!Prefs.loggedIn(this) || payStatusLoading) {
             return;
         }
+        if (!force && System.currentTimeMillis() - payStatusAt < PAY_STATUS_MIN_INTERVAL_MS) {
+            return;
+        }
+        payStatusLoading = true;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -120,6 +148,11 @@ public class WaterActivity extends BaseActivity {
                 ui.post(new Runnable() {
                     @Override
                     public void run() {
+                        payStatusLoading = false;
+                        payStatusAt = System.currentTimeMillis();
+                        if (!resumed || isFinishing()) {
+                            return;     // 页面已经不在了，这次结果作废
+                        }
                         nopwd = st;
                         if (!naggedThisVisit
                                 && PayStatus.shouldNag(WaterActivity.this,
@@ -147,20 +180,27 @@ public class WaterActivity extends BaseActivity {
         } else {
             btnActivate.setEnabled(true);
             loadDevice();
-            refreshPayStatus();
+            refreshPayStatus(true);
         }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        resumed = true;
         polling = true;
         poll();
+        // 这里必须重查免密状态：看到「建议开通免密」后，用户很可能直接跳到
+        // 「慧生活798」开通、再切回来。之前 onResume 只重起了设备轮询，没重查
+        // 免密状态 —— 切回来看到的还是旧结果，表现就是「免密状态拉取有延迟」。
+        // （洗澡页一直是重查的，只有取水页漏了这一句。）
+        refreshPayStatus(false);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
         polling = false;
     }
 
@@ -174,7 +214,7 @@ public class WaterActivity extends BaseActivity {
             loadDevice();
             polling = true;
             poll();
-            refreshPayStatus();
+            refreshPayStatus(true);
         }
     }
 
@@ -214,7 +254,7 @@ public class WaterActivity extends BaseActivity {
             if (Prefs.loggedIn(this)) {
                 btnActivate.setEnabled(true);
                 loadDevice();
-                refreshPayStatus();
+                refreshPayStatus(true);
             } else {
                 // 放弃登录 —— 退回首页
                 finish();
@@ -257,6 +297,28 @@ public class WaterActivity extends BaseActivity {
                         }
                         JSONObject bm = dev.optJSONObject("bm");
                         JSONObject ep = dev.optJSONObject("ep");
+
+                        // 顺手补 eid —— 798 查免密协议（pga-check）必须要它，而它原先
+                        // 只在**登录响应**里取一次。用旧版本登录过的账号本地是空的，
+                        // 于是 PayStatus.checkWater 直接返回 UNKNOWN、**连请求都不发**，
+                        // 表现就是「免密状态拉不到 / 一直不更新」。
+                        // dev/home 的响应里带着同一个企业 id（ep.id，与 deviceShare.eid 一致），
+                        // 这里直接补齐，用户不必重新登录。
+                        if (Prefs.eid(WaterActivity.this).length() == 0) {
+                            String eid = ep == null ? "" : ep.optString("id", "");
+                            if (eid.length() == 0) {
+                                JSONObject share = dev.optJSONObject("deviceShare");
+                                eid = share == null ? "" : share.optString("eid", "");
+                            }
+                            if (eid.length() > 0) {
+                                Prefs.saveEid(WaterActivity.this, eid);
+                                // 刚才那次免密查询是空转的（没发出请求），清掉节流状态重来一次
+                                payStatusLoading = false;
+                                payStatusAt = 0;
+                                refreshPayStatus(true);
+                            }
+                        }
+
                         String model = bm == null ? "" : bm.optString("model", "");
                         String brand = bm == null ? "" : bm.optString("brand", "");
                         String unit = bm == null ? "" : bm.optString("unit", "");
