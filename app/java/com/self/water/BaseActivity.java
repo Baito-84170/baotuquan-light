@@ -20,6 +20,15 @@ public class BaseActivity extends Activity {
     /** 从「登录已过期」弹窗里跳去登录页时用的请求码。 */
     protected static final int REQ_RELOGIN = 9001;
 
+    /**
+     * 最近一次登录成功的时间（进程内共享）。
+     *
+     * 用来压掉"刚登录完还弹登录已过期"的误报：登录页回来时，上一轮请求
+     * （尤其是每 3 秒一次的 /dev/status 轮询）可能还带着**旧 token** 在飞，
+     * 它的 -99 会在登录成功后立刻弹出一个假的过期提示。
+     */
+    protected static long lastLoginAtMs = 0;
+
     /** 本轮页面生命周期里是否已经弹过过期提示，避免轮询反复弹。 */
     private boolean expiredShown;
     /** 上面那次重登是去登哪个账号。 */
@@ -105,6 +114,10 @@ public class BaseActivity extends Activity {
      */
     protected boolean checkWater(Api.Resp r) {
         if (!Api.isExpired(r)) {
+            return false;
+        }
+        // 刚登录完的 20 秒内当它没发生：多半是旧 token 的请求晚到了。
+        if (System.currentTimeMillis() - lastLoginAtMs < 20000L) {
             return false;
         }
         return promptExpired(false);

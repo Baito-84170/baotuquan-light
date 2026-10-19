@@ -113,6 +113,12 @@ public class LoginActivity extends BaseActivity {
             say("请输入图形验证码。");
             return;
         }
+        // 服务端把验证码当整数解析：带字母会直接回「系统错误」，用户根本看不懂。
+        // 输入框已经限制成数字键盘，这里再兜一层（粘贴、第三方输入法都可能绕过）。
+        if (!cap.matches("\\d+")) {
+            say("图形验证码只能填数字（图片上是纯数字）。");
+            return;
+        }
         btnGetSms.setEnabled(false);
         say("正在发送…");
         new Thread(new Runnable() {
@@ -130,8 +136,28 @@ public class LoginActivity extends BaseActivity {
                         } else if (code == 0) {
                             say("短信已发送，请查看手机。");
                         } else {
-                            say("发送失败：" + j.optString("msg", "code=" + code)
-                                    + "（可点「刷新图片」重试）");
+                            // 服务端的错误码不够友好：验证码过期/找不到时会直接抛
+                            // {"code":-100,"msg":"系统错误"}，看着像服务器挂了，
+                            // 其实换一张验证码就行。这里按码给出可操作的说法。
+                            String hint;
+                            switch (code) {
+                                case -2:
+                                    hint = "图形验证码不对，已换一张，请重新输入";
+                                    break;
+                                case -100:
+                                    // 经验证：验证码里带非数字、或字段为空时，服务端 parseInt
+                                    // 抛异常，直接回 {"code":-100,"msg":"系统错误"}。
+                                    // 图片上的验证码是**纯数字**，所以这里只说人话。
+                                    hint = "验证码只能填数字，请核对后重试（已换一张）";
+                                    break;
+                                case -1:
+                                    hint = "请求参数不对，已换一张；反复失败请更新版本";
+                                    break;
+                                default:
+                                    hint = j.optString("msg", "code=" + code) + "（已换一张）";
+                                    break;
+                            }
+                            say("发送失败：" + hint);
                             loadCaptcha();
                         }
                     }
@@ -167,6 +193,8 @@ public class LoginActivity extends BaseActivity {
                             Prefs.saveLogin(LoginActivity.this, phone, token, uid);
                             // eid 是查免密协议状态用的，登录时顺手存下来
                             Prefs.saveEid(LoginActivity.this, eid == null ? "" : eid);
+                            // 记下登录时刻：压掉"刚登录完还弹登录已过期"的误报
+                            lastLoginAtMs = System.currentTimeMillis();
                             setResult(RESULT_OK);
                             finish();
                         } else {

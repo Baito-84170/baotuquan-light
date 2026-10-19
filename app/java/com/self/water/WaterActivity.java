@@ -175,6 +175,10 @@ public class WaterActivity extends BaseActivity {
             liveStatusTv.setText("未登录");
             tintBadge(R.color.warn_bg, R.color.warn);
             statusTv.setText("");
+            // 关键：进入登录页时就把"刚登录"的时间戳打上。旧 token 的轮询请求
+            // （/dev/status 每 3 秒一次）会在登录页盖住本页时返回 -99，
+            // 那个弹窗要等你登录回来才看得见 —— 表现就是"一登录就弹登录已过期"。
+            lastLoginAtMs = System.currentTimeMillis();
             startActivityForResult(
                     new Intent(this, LoginActivity.class), REQ_LOGIN);
         } else {

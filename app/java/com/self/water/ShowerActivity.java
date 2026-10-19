@@ -3,6 +3,8 @@ package com.self.water;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -116,13 +118,13 @@ public class ShowerActivity extends BaseActivity {
         findViewById(R.id.btnShowerEnd).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                endPending();
+                onPendingPrimary();
             }
         });
         findViewById(R.id.btnPendingEnd).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                endPending();
+                onPendingPrimary();
             }
         });
         findViewById(R.id.btnPendingCancel).setOnClickListener(new View.OnClickListener() {
@@ -156,7 +158,117 @@ public class ShowerActivity extends BaseActivity {
             // ③ 进页面自动查询，不用再手点「查询设备」
             autoQuery();
             refreshPayStatus();
+            // 从支付宝回来时确认那笔待支付订单到底付掉没有 —— 付了就清掉本地记录
+            verifyPendingPaid();
+            startShowerSyncTicker();
         }
+    }
+
+    /**
+     * 确认「已结束待支付」那笔订单是否已付款，付了就清掉本地记录。
+     *
+     * 这是"付款成功才清"的闭环：只有服务端 {@code order/pay_status} 明确说 true 才清，
+     * 否则记录一直留着，用户随时能在页面上点「去支付宝付款」补付。
+     */
+    private void verifyPendingPaid() {
+        final Prefs.PendingOrder p = Prefs.pgPending(this);
+        if (p.isEmpty() || !p.ended || p.orderNo.length() == 0) {
+            return;
+        }
+        final int pt = p.payType != 0 ? p.payType : payType;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final PanggualApi.Resp r = PanggualApi.payStatus(p.orderNo, pt,
+                        Prefs.pgToken(ShowerActivity.this));
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        JSONObject j = r.json();
+                        if (j != null && j.optBoolean("data", false)) {
+                            Prefs.clearPgPending(ShowerActivity.this);
+                            refreshPending();
+                            say("这笔洗澡订单已付款 ✓", R.color.ok_bg, R.color.ok);
+                        } else {
+                            // 还没付：顺手预热一次支付参数。
+                            // 好处一：点「去支付宝付款」能立刻响应（用户不用等重试）。
+                            // 好处二：prePay 只取参数、不扣款，失败的响应会落进 api.log，
+                            // 出问题时不用再靠猜、也不用等用户截图。
+                            // 预热已停用（回滚为单次尝试）
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /**
+     * 记录里的订单预热一次 prePay（仅获取支付参数，不会产生任何扣款）。
+     *
+     * 风控参数优先用当前已解析的设备；页面刚打开、设备还没查回来时退回记录里的 SN。
+     */
+    private int prefetchRetry = 0;
+
+    private void prefetchPrepay(final Prefs.PendingOrder p) {
+        if (p == null || p.orderNo.length() == 0) {
+            return;
+        }
+        // shower/sync 必须要 skuId，而它要等 autoQuery 解析完设备才有。
+        // 预热是在 onResume 触发的，那时 device 往往还是 null —— 以前就直接跳过了，
+        // 结果 order/shower/sync 一次都没发出去。等设备就绪再跑。
+        final String skuCheck = device != null ? device.optString("skuId") : "";
+        if (skuCheck == null || skuCheck.length() == 0) {
+            if (prefetchRetry < 6) {
+                prefetchRetry++;
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        prefetchPrepay(p);
+                    }
+                }, 2000);
+            } else {
+                prefetchRetry = 0;
+            }
+            return;
+        }
+        prefetchRetry = 0;
+        final int pt = p.payType != 0 ? p.payType : payType;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String token = Prefs.pgToken(ShowerActivity.this);
+                PanggualApi.Risk risk = riskForPending(p);
+
+                // 官方顺序（DeviceStartupVm）：
+                //   remoteEnd → goods/shower/sync{skuId}（结算金额）
+                //            → order/afterPay/creating{orderNo}（建支付单）
+                //            → pay/unify/prePay{orderNo,payType}（拿支付参数）
+                // 我们以前直接从 remoteEnd 跳到 prePay，所以服务端一直说
+                // "TradeOrder not exist"、prePay 回 -1。
+                String skuId = device != null ? device.optString("skuId") : "";
+                if (skuId != null && skuId.length() > 0) {
+                    PanggualApi.Resp sync = PanggualApi.showerSync(skuId, token, risk);
+                } else {
+                }
+
+                PanggualApi.Resp created = PanggualApi.afterPayCreate(
+                        p.orderNo, pt, token, risk);
+
+                PanggualApi.Resp w = PanggualApi.prePay(p.orderNo, pt,
+                        PanggualApi.AGAIN_FIRST, token, risk);
+            }
+        }).start();
+    }
+
+    /** 风控参数：优先当前设备，设备还没查回来时退回记录里的 SN + 分类码。 */
+    private PanggualApi.Risk riskForPending(Prefs.PendingOrder p) {
+        JSONObject d = device;
+        String imei = d != null ? d.optString("imei") : (p == null ? "" : p.sn);
+        String cc = d != null ? d.optString("categoryCode") : "";
+        if (cc == null || cc.length() == 0) {
+            cc = "08";
+        }
+        return new PanggualApi.Risk(imei, cc, LAT, LNG);
     }
 
     @Override
@@ -564,10 +676,34 @@ public class ShowerActivity extends BaseActivity {
             findViewById(R.id.btnShowerEnd).setVisibility(View.GONE);
             return;
         }
-        boolean running = p.orderNo.length() > 0;
+
+        // 三种状态：
+        //   unpaid  —— 已经 remoteEnd（门关了）但还没付款
+        //   running —— 正在洗（有 orderNo，还没结束）
+        //   booked  —— 已下单但没解锁成功（没有 orderNo），只能撤销
+        final boolean unpaid = p.ended && p.orderNo.length() > 0;
+        final boolean running = !unpaid && p.orderNo.length() > 0;
+
         pendingBox.setVisibility(View.VISIBLE);
+        TextView title = findViewById(R.id.pendingTitle);
+        Button endBtn = findViewById(R.id.btnPendingEnd);
+
+        if (unpaid) {
+            // 这个状态以前根本不存在 —— 旧代码在付款前就把记录清了，
+            // 于是「稍后」之后这笔订单就彻底找不到了。
+            findViewById(R.id.btnShowerEnd).setVisibility(View.GONE);
+            title.setText("这笔洗澡订单还没付款");
+            pendingInfo.setText("订单号 " + p.orderNo
+                    + "\n门已经关了，但钱还没付。"
+                    + "\n不付掉的话，下一次洗澡会被服务端拦住（code 2128）。");
+            endBtn.setText("去支付宝付款");
+            findViewById(R.id.btnPendingCancel).setVisibility(View.GONE);
+            return;
+        }
+
         findViewById(R.id.btnShowerEnd).setVisibility(View.VISIBLE);
-        ((TextView) findViewById(R.id.pendingTitle)).setText(running
+        endBtn.setText(R.string.btn_pending_end);
+        title.setText(running
                 ? R.string.shower_pending_running : R.string.shower_pending_title);
         pendingInfo.setText(getString(
                 running ? R.string.shower_pending_running_info : R.string.shower_pending_info,
@@ -576,6 +712,104 @@ public class ShowerActivity extends BaseActivity {
                 p.at == 0 ? "—" : new SimpleDateFormat("MM-dd HH:mm", Locale.US)
                         .format(new Date(p.at))));
         findViewById(R.id.btnPendingCancel).setVisibility(running ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * 结束之后立刻结算：goods/shower/sync（算金额）→ order/afterPay/creating（建支付单）→ prePay。
+     *
+     * 关键在**时机**：shower/sync 必须在 remoteEnd 之后马上调。之前把它放在"打开页面时预热"里，
+     * 隔了几分钟/几小时才调，服务端返回 {"status":5,"amount":0} —— 金额算不出来，
+     * prePay 自然拿不到参数。用户侧看到的就是"服务器没有返回参数"。
+     */
+    private void settleAfterEnd(final Prefs.PendingOrder p) {
+        final String sku = device == null ? "" : device.optString("skuId");
+        final String token = Prefs.pgToken(this);
+        final PanggualApi.Risk risk = currentRisk();
+        final int pt = payType;
+        if (sku == null || sku.length() == 0) {
+            PayFlow.settle(this, p.orderNo, pt, token, risk);
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                PanggualApi.Resp r = PanggualApi.showerSync(sku, token, risk);
+                PanggualApi.Resp c = PanggualApi.afterPayCreate(p.orderNo, pt, token, risk);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        PayFlow.settle(ShowerActivity.this, p.orderNo, pt, token, risk);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private boolean syncTickerRunning = false;
+
+    /**
+     * 洗澡过程中定时上报用量：goods/shower/sync。
+     *
+     * 这是**服务端累积用量的唯一入口**。官方 1.143.1 在 LockingAct（解锁后立刻）和
+     * StartStatusAct（「使用中」页面，反复调用）里调它；我们以前只在结束之后才调一次，
+     * 服务端压根没累积过用量，于是 amount 恒为 0 —— 没有可付金额，
+     * prePay 就永远回 {"code":-1,"msg":null}，支付通道整个断掉。
+     */
+    private void startShowerSyncTicker() {
+        if (syncTickerRunning) {
+            return;
+        }
+        syncTickerRunning = true;
+        tickShowerSync();
+    }
+
+    private void tickShowerSync() {
+        if (isFinishing()) {
+            syncTickerRunning = false;
+            return;
+        }
+        Prefs.PendingOrder p = Prefs.pgPending(this);
+        if (p.isEmpty() || p.ended || p.orderNo.length() == 0) {
+            syncTickerRunning = false;
+            return;
+        }
+        syncShowerOnce();
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                tickShowerSync();
+            }
+        }, 10000);
+    }
+
+    /** 调一次 goods/shower/sync（只上报，不扣款）。 */
+    private void syncShowerOnce() {
+        final String sku = device == null ? "" : device.optString("skuId");
+        if (sku == null || sku.length() == 0) {
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                PanggualApi.Resp r = PanggualApi.showerSync(sku,
+                        Prefs.pgToken(ShowerActivity.this), currentRisk());
+            }
+        }).start();
+    }
+
+    /** 在途订单区那个主按钮：没付款就去付，还没结束就去结束。 */
+    private void onPendingPrimary() {
+        Prefs.PendingOrder p = Prefs.pgPending(this);
+        if (p.isEmpty()) {
+            refreshPending();
+            return;
+        }
+        if (p.ended && p.orderNo.length() > 0) {
+            int pt = p.payType != 0 ? p.payType : payType;
+            PayFlow.settle(this, p.orderNo, pt, Prefs.pgToken(this), currentRisk());
+        } else {
+            endPending();
+        }
     }
 
     // ---------------------------------------------------- 通用
@@ -856,6 +1090,7 @@ public class ShowerActivity extends BaseActivity {
 
                 final String orderNo = PanggualApi.pickUnlockOrderNo(unlock);
                 Prefs.setPgPendingOrderNo(ShowerActivity.this, orderNo);
+                    startShowerSyncTicker();
                 ShowerMachines.invalidate();
                 runOnUiThread(new Runnable() {
                     @Override
@@ -897,7 +1132,15 @@ public class ShowerActivity extends BaseActivity {
             ended = end.err == null && end.code() == 0;
         }
         if (ended) {
-            Prefs.clearPgPending(this);
+            // 和 endPending 保持一致：结束之后**不能清记录**，要留成「已结束待支付」，
+            // 否则这笔订单在本地消失、又没付钱，就成了没人认领的挂账。
+            Prefs.PendingOrder keep = Prefs.pgPending(this);
+            keep.orderNo = orderNo;
+            keep.goodsId = goodsId;
+            keep.ended = true;
+            keep.payType = payType;
+            keep.at = System.currentTimeMillis();
+            Prefs.savePgPending(this, keep);
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -987,7 +1230,17 @@ public class ShowerActivity extends BaseActivity {
                     @Override
                     public void run() {
                         if (r.err == null && r.code() == 0) {
-                            Prefs.clearPgPending(ShowerActivity.this);
+                            // 不要在这里清记录！以前清了之后，如果 prePay 没给参数、
+                            // 或者用户点了「稍后」，这笔订单在本地就彻底消失了 ——
+                            // 既没法补付也没法撤销，只能去官方 App 里翻。
+                            // 改成打 ended 标记，**付款成功才真正清掉**。
+                            Prefs.PendingOrder keep = Prefs.pgPending(ShowerActivity.this);
+                            keep.orderNo = p.orderNo;
+                            keep.goodsId = p.goodsId;
+                            keep.ended = true;
+                            keep.payType = payType;
+                            keep.at = System.currentTimeMillis();
+                            Prefs.savePgPending(ShowerActivity.this, keep);
                             refreshPending();
                             say(getString(R.string.shower_ended_ok, p.orderNo),
                                     R.color.ok_bg, R.color.ok);

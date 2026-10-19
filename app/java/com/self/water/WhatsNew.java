@@ -19,6 +19,7 @@ public final class WhatsNew {
 
     /** versionCode，从新到旧。 */
     private static final int[] CODES = {
+            51,
             50,
             49,
             48,
@@ -29,6 +30,7 @@ public final class WhatsNew {
 
     /** 对应的版本名，和 CODES 一一对应。 */
     private static final String[] NAMES = {
+            "7.11",
             "7.10.2",
             "7.10.1",
             "7.10",
@@ -39,6 +41,9 @@ public final class WhatsNew {
 
     /** 对应的更新说明，和 CODES 一一对应。 */
     private static final String[] NOTES = {
+            "• 洗澡支付修好了：原来只在结束后才结算，服务端算不出金额，于是永远拿不到支付参数、付不了款。现在按官方做法在洗澡过程中持续上报用量，支付已恢复跳转支付宝。\n"
+            + "• 顺带：结束但未付款的订单不再丢失，会留在洗澡页上，可随时点「去支付宝付款」补付。",
+
             "• 修好「取水」的免密支付状态判定：之前查协议时用错了枚举，会永远判成「未开通」，反复弹「建议开通支付宝免密」；同时补上 eid 自动获取（老账号不必重新登录），并改成每次回到页面都刷新一次状态。",
 
             "• 换了个更快的更新源（自建镜像），下载和检查更新都比以前快。",

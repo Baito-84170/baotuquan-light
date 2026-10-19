@@ -76,7 +76,8 @@
                     android:layout_weight="1"
                     style="@style/Input"
                     android:hint="@string/hint_captcha"
-                    android:inputType="text"
+                    android:inputType="number"
+                    android:digits="0123456789"
                     android:maxLength="6" />
 
                 <ImageView

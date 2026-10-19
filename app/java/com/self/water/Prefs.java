@@ -203,11 +203,21 @@ public final class Prefs {
      */
     public static final class PendingOrder {
         public String orderId = "";   // trade/create 返回的 orderId，撤销用它
-        public String orderNo = "";   // unlock 返回的 orderNo，结束用它
+        public String orderNo = "";   // unlock 返回的 orderNo，结束/支付用它
         public String goodsId = "";
         public String sn = "";
         public String title = "";
         public long at;
+        /**
+         * 已经发过 remoteEnd（门关了），但**还没付款**。
+         *
+         * 以前 endPending() 在调 settle() 之前就把记录清了 —— 一旦服务端没给
+         * 支付参数、或者用户点了「稍后」，这笔订单在本地就彻底丢了，
+         * 只能去官方 App 里翻。现在改成：结束只打标记，付款成功才清。
+         */
+        public boolean ended;
+        /** 结算用的支付方式（胖乖的 payType），补付时要带上。 */
+        public int payType;
 
         public boolean isEmpty() {
             return orderId.length() == 0 && orderNo.length() == 0;
@@ -230,6 +240,8 @@ public final class Prefs {
             p.sn = o.optString("sn", "");
             p.title = o.optString("title", "");
             p.at = o.optLong("at", 0);
+            p.ended = o.optBoolean("ended", false);
+            p.payType = o.optInt("payType", 0);
         } catch (Exception ignored) {
             // 坏了就当没有，避免卡在一个解析不了的记录上
         }
@@ -249,6 +261,8 @@ public final class Prefs {
             o.put("sn", p.sn == null ? "" : p.sn);
             o.put("title", p.title == null ? "" : p.title);
             o.put("at", p.at == 0 ? System.currentTimeMillis() : p.at);
+            o.put("ended", p.ended);
+            o.put("payType", p.payType);
             sp(c).edit().putString(K_PG_PENDING, o.toString()).apply();
         } catch (Exception ignored) {
         }

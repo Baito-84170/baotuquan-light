@@ -461,9 +461,109 @@ public final class PanggualApi {
      *              → pay/unify/prePay{orderNo,payType} → 拉起支付
      */
     public static Resp prePay(String orderNo, int payType, String token, Risk risk) {
+        return prePay(orderNo, payType, AGAIN_FIRST, token, risk);
+    }
+
+    /**
+     * 诊断用：**完全不带 againFlag**，即最早那版的行为。
+     * 用来对比"带不带这个字段""带 0 还是带 1"哪种能拿到 prepayParam。
+     */
+    public static Resp prePayNoFlag(String orderNo, int payType, String token, Risk risk) {
         return post("/pay/unify/prePay", map(
                 "orderNo", orderNo == null ? "" : orderNo,
                 "payType", String.valueOf(payType)), token, risk);
+    }
+
+    /**
+     * 结束之后、预支付之前的那一步：`order/afterPay/creating`。
+     *
+     * 官方顺序是 remoteEnd → order/afterPay/creating → payChannelRoute/againPay → prePay，
+     * 我们一直只做 remoteEnd → prePay。经验证（新旧两笔订单、againFlag 0/1/不带 全试过）
+     * prePay 一律回 {"code":-1,"msg":null}，说明缺前置：这笔订单还没有"支付单"。
+     * 这一步就是去把它建出来，返回 AfterPay。
+     */
+    public static Resp afterPayCreate(String orderNo, int payType, String token, Risk risk) {
+        // 官方 afterPayCreate 的 map 里**只有 orderNo**（DeviceStartupVm 里
+        // hashMapOf("orderNo", orderNo)）。多塞 payType / orderId 会让它返回全 null。
+        return post("/order/afterPay/creating", map(
+                "orderNo", orderNo == null ? "" : orderNo), token, risk);
+    }
+
+    /**
+     * 洗澡结算：`goods/shower/sync`，参数只有 skuId。
+     *
+     * 这是 remoteEnd 之后、建立支付单之前必须要有的一步 —— 官方
+     * `DeviceStartupVm.showerSync(skuId)` 就是它。没有它，这一单算不出
+     * 最终金额，服务端也就没有 trade order：
+     *   - order/sync 会回 "TradeOrder not exist"
+     *   - order/afterPay/creating 返回全 null
+     *   - pay/unify/prePay 回 {"code":-1,"msg":null}
+     * 这正是"拿不到支付参数"的真正根因。
+     */
+    public static Resp showerSync(String skuId, String token, Risk risk) {
+        return post("/goods/shower/sync", map(
+                "skuId", skuId == null ? "" : skuId), token, risk);
+    }
+
+    /**
+     * 结算同步：`order/sync`，参数只有 orderNo + payType。
+     *
+     * 官方 `PayStateVm.orderSync(orderNo,payType)` 就是它。用在两个地方：
+     * 洗完结束之后把这一单的**最终金额结算出来**，以及支付完成后同步订单状态。
+     * 我们一直没调过 —— 没有它，订单就没有"可付金额"，
+     * 后续 afterPay/creating 返回全 null、prePay 返回 -1 就都说得通了。
+     */
+    public static Resp orderSync(String orderNo, int payType, String token, Risk risk) {
+        return post("/order/sync", map(
+                "orderNo", orderNo == null ? "" : orderNo,
+                "payType", String.valueOf(payType)), token, risk);
+    }
+
+    /**
+     * 同上，但把 trade/create 返回的 {@code orderId} 也带上。
+     *
+     * 经验证只用 orderNo 调，服务端回 code:0 却把 data 里的字段全填 null ——
+     * 说明它没认出要建哪笔单。而 trade/create 的 orderId（…2225603）和
+     * unlock 的 orderNo（…2225634）是两个不同的号，所以两个都发，让它自己挑。
+     */
+    public static Resp afterPayCreate(String orderId, String orderNo, int payType,
+                                      String token, Risk risk) {
+        java.util.Map<String, String> m = map(
+                "orderNo", orderNo == null ? "" : orderNo,
+                "payType", String.valueOf(payType));
+        if (orderId != null && orderId.length() > 0) {
+            m.put("orderId", orderId);
+        }
+        return post("/order/afterPay/creating", m, token, risk);
+    }
+
+    /**
+     * {@code againFlag}：0 = 首次支付，1 = 再次支付。
+     * 官方 `PayModeVm.prePay$default` 里 `againFlag` 的默认值就是 {@code "0"}。
+     */
+    public static final String AGAIN_FIRST = "0";
+    public static final String AGAIN_RETRY = "1";
+
+    /**
+     * 带 againFlag 的预支付。
+     *
+     * ！！`againFlag` 是**必填**：官方实现里
+     * <pre>
+     * Map map = mutableMapOf("orderNo"→orderNo, "payType"→payType, "againFlag"→againFlag);
+     * if (outVoucherId.length() > 0) map.put("outVoucherId", outVoucherId);   // 可选
+     * if (thirdChannel.length() > 0) map.put("thirdChannel", thirdChannel);   // 可选
+     * </pre>
+     * 我们之前只发了 orderNo + payType，服务端直接回 {@code {"code":-1,"msg":null}} ——
+     * 和当初 2128 那类"少参数"的反应一模一样：没有报错信息，只有 code -1。
+     * 结果就是 prepayParam 拿不到 → PayFlow 只能退回打开官方 App（看起来"点了去支付却跳胖乖"）。
+     */
+    public static Resp prePay(String orderNo, int payType, String againFlag,
+                              String token, Risk risk) {
+        return post("/pay/unify/prePay", map(
+                "orderNo", orderNo == null ? "" : orderNo,
+                "payType", String.valueOf(payType),
+                "againFlag", againFlag == null || againFlag.length() == 0 ? AGAIN_FIRST : againFlag),
+                token, risk);
     }
 
     /** 钱包余额支付（payType 恒为 2）。 */
@@ -480,11 +580,72 @@ public final class PanggualApi {
                 "payType", String.valueOf(payType)), token, null);
     }
 
-    /** 取 prepayParam（交给支付渠道处理的串）。 */
+    /**
+     * 取 prepayParam（交给支付渠道处理的串）。
+     *
+     * 只认死 {@code data.prepayParam} 太脆：服务端哪天换个 key，这里就静默拿到空串，
+     * 接着 jump() 拿不到参数 → 打开官方 App，用户看到的就是「点了去支付却跳去胖乖」，
+     * 而且弹窗里连报错都没有（因为 prePay 本身是成功的）。所以按三层兜底取：
+     *   1. 已知的几种 key 名；
+     *   2. 根对象上的同名 key；
+     *   3. 最后按内容特征扫一遍 —— 支付宝 orderString 一定含 sign= / app_id= / biz_content=。
+     */
+    private static final String[] PREPAY_KEYS = {
+            "prepayParam", "prepayParams", "prepayStr", "payParam", "payParams",
+            "param", "params", "orderString", "orderStr", "orderInfo", "payInfo",
+    };
+
     public static String pickPrepayParam(Resp r) {
         JSONObject j = r == null ? null : r.json();
-        JSONObject d = j == null ? null : j.optJSONObject("data");
-        return d == null ? "" : d.optString("prepayParam", "");
+        if (j == null) {
+            return "";
+        }
+        JSONObject d = j.optJSONObject("data");
+        String v = pickByKeys(d, PREPAY_KEYS);
+        if (v.length() > 0) {
+            return v;
+        }
+        v = pickByKeys(j, PREPAY_KEYS);
+        if (v.length() > 0) {
+            return v;
+        }
+        v = scanAlipayString(d);
+        if (v.length() > 0) {
+            return v;
+        }
+        return scanAlipayString(j);
+    }
+
+    private static String pickByKeys(JSONObject o, String[] keys) {
+        if (o == null) {
+            return "";
+        }
+        for (String k : keys) {
+            String s = o.optString(k, "");
+            if (s != null && s.length() > 0) {
+                return s;
+            }
+        }
+        return "";
+    }
+
+    /** 兜底：在这个对象的所有字符串值里找一条像支付宝 orderString 的串。 */
+    private static String scanAlipayString(JSONObject o) {
+        if (o == null) {
+            return "";
+        }
+        java.util.Iterator<String> it = o.keys();
+        while (it.hasNext()) {
+            Object val = o.opt(it.next());
+            if (val instanceof String) {
+                String s = (String) val;
+                if (s.indexOf("sign=") >= 0 || s.indexOf("app_id=") >= 0
+                        || s.indexOf("biz_content=") >= 0) {
+                    return s;
+                }
+            }
+        }
+        return "";
     }
 
     /**

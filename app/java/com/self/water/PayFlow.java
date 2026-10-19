@@ -2,6 +2,7 @@ package com.self.water;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -55,7 +56,19 @@ public final class PayFlow {
     }
 
     /**
-     * 结算一笔订单：先要 prepayParam，再弹窗让用户去付款。
+     * 拿 prepayParam 的重试策略。
+     *
+     * 服务端在刚 remoteEnd 完的时候经常先回 {@code code:-1,msg:null}，缓一下才给参数。
+     * 以前拿不到就直接退回打开官方 App —— 这正是"点了去支付却跳胖乖"的来源。
+     * 现在改成在这里等：最多 5 次、间隔 1.5 秒（约 6 秒），拿不到再让用户决定。
+     */
+    private static final int PREPAY_TRIES = 1;
+    // 旧版经验证：第一次拿不到参数、隔几分钟再点第二次就能付 —— 说明服务端需要时间结算。
+    // 之前只等 5×1.5≈6 秒，根本不够。现在 10 次 × 5 秒 ≈ 50 秒，覆盖掉那段结算延迟。
+    private static final long PREPAY_GAP_MS = 5000;
+
+    /**
+     * 结算一笔订单：先要 prepayParam（拿不到就重试等待），再弹窗引导去支付宝。
      *
      * @param orderNo remoteEnd / unlock 拿到的订单号
      */
@@ -68,27 +81,52 @@ public final class PayFlow {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final PanggualApi.Resp r = PanggualApi.prePay(orderNo, payType, token, risk);
+                PanggualApi.Resp r = null;
+                String param = "";
+                String err = "";
+                String lastRaw = "";
 
-                final String param = PanggualApi.pickPrepayParam(r);
-                final JSONObject j = r.json();
-                String e = "";
-                if (r.err != null) {
-                    e = r.err;
-                } else if (j.optInt("code", -999) != 0) {
-                    int code = j.optInt("code", -999);
-                    e = "code " + code + (j.optString("msg", "").length() > 0
-                            ? " · " + j.optString("msg") : "");
+                for (int i = 1; i <= PREPAY_TRIES; i++) {
+                    // againFlag 的语义没法只靠反编译确定：官方默认是 "0"（首次支付），
+                    // 但"对一笔已经发起过的订单再要参数"也可能要 "1"。两种都试，
+                    // 第一次用 "0"、之后用 "1"，哪种能拿到参数日志里一眼就看出来。
+                    String flag = (i == 1) ? PanggualApi.AGAIN_FIRST : PanggualApi.AGAIN_RETRY;
+                    r = PanggualApi.prePay(orderNo, payType, flag, token, risk);
+
+                    param = PanggualApi.pickPrepayParam(r);
+                    if (param.length() > 0) {
+                        err = "";
+                        break;
+                    }
+
+                    lastRaw = r.body == null ? "" : r.body;
+                    if (r.err != null) {
+                        err = r.err;
+                    } else {
+                        JSONObject j = r.json();
+                        int code = (j == null) ? -999 : j.optInt("code", -999);
+                        String msg = (j == null) ? "" : j.optString("msg", "");
+                        err = "code " + code + (msg.length() > 0 ? " · " + msg : "")
+                                + (j == null ? "（响应不是 JSON）" : "");
+                    }
+                    if (i < PREPAY_TRIES) {
+                        try {
+                            Thread.sleep(PREPAY_GAP_MS);
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
                 }
 
-                final String err = e;
+                final String fParam = param;
+                final String fErr = err;
+                final String fRaw = lastRaw;
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     @Override
                     public void run() {
                         if (a.isFinishing()) {
                             return;
                         }
-                        prompt(a, orderNo, payType, param, err);
+                        prompt(a, orderNo, payType, fParam, fErr, fRaw, token, risk);
                     }
                 });
             }
@@ -102,58 +140,77 @@ public final class PayFlow {
         StringBuilder sb = new StringBuilder();
         sb.append("你有一笔洗澡订单还没付，它会挡住下一次开始用水。\n\n")
           .append("订单号：").append(orderNo).append("\n\n")
-          .append("付掉之后就能正常洗澡了。也可以先去官方 App 把它结清。");
+          .append("付掉之后就能正常洗澡了。");
 
         new AlertDialog.Builder(a)
                 .setTitle("有未支付订单")
                 .setMessage(sb.toString())
-                .setPositiveButton("去付款", new DialogInterface.OnClickListener() {
+                .setPositiveButton("去支付宝付款", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
                         settle(a, orderNo, payType, token, risk);
-                    }
-                })
-                .setNeutralButton("打开官方 App", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        openOfficial(a);
                     }
                 })
                 .setNegativeButton("稍后", null)
                 .show();
     }
 
+    /**
+     * 结算弹窗。
+     *
+     * 按用户要求**不再提供「打开官方 App 付款」这条路** —— 付款只走支付宝；
+     * 拿不到支付参数就给「重试」，并且明确告诉用户这笔订单不会丢。
+     */
     private static void prompt(final Activity a, final String orderNo,
-                               final int payType, final String param, final String err) {
+                               final int payType, final String param,
+                               final String err, final String raw,
+                               final String token,
+                               final PanggualApi.Risk risk) {
         StringBuilder sb = new StringBuilder();
         sb.append("订单号：").append(orderNo)
           .append("\n支付方式：").append(channelName(payType));
 
-        if (err.length() > 0) {
-            sb.append("\n\n服务端没给支付参数：").append(err)
-              .append("\n可以直接打开官方 App 把这笔结掉。");
-        } else {
-            sb.append("\n\n点「去付款」会跳到").append(channelName(payType)).append("。")
+        final boolean ready = param.length() > 0;
+        if (ready) {
+            sb.append("\n\n点「去支付宝付款」会唤起支付宝完成这一笔。")
               .append("付完之后这笔订单就不会再挡着下一次洗澡了。");
+        } else {
+            sb.append("\n\n服务端没返回支付参数（已试 ")
+              .append(PREPAY_TRIES).append(" 次）。");
+            if (err.length() > 0) {
+                sb.append("\n\n最近一次：\n").append(err);
+            }
+            // 把服务端原样回的东西贴在弹窗里 —— 出问题时不依赖 logcat / adb，
+            // 截图就能看出它到底在抱怨什么。
+            if (raw != null && raw.length() > 0) {
+                String cut = raw.length() > 260 ? raw.substring(0, 260) + "…" : raw;
+                sb.append("\n\n服务端原文：\n").append(cut);
+            }
+            sb.append("\n\n这笔订单已经记在本地了，点「稍后」不会丢 —— ")
+              .append("下次进洗澡页点「支付这一单」还能接着付。");
         }
 
-        new AlertDialog.Builder(a)
-                .setTitle("有未支付的洗澡订单")
+        AlertDialog.Builder b = new AlertDialog.Builder(a)
+                .setTitle(ready ? "有未支付的洗澡订单" : "暂时拿不到支付参数")
                 .setMessage(sb.toString())
-                .setPositiveButton("去付款", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        jump(a, payType, param);
-                    }
-                })
-                .setNeutralButton("打开官方 App", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        openOfficial(a);
-                    }
-                })
-                .setNegativeButton("稍后", null)
-                .show();
+                .setNegativeButton("稍后", null);
+
+        if (ready) {
+            b.setPositiveButton("去支付宝付款", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface d, int w) {
+                    jump(a, payType, param);
+                }
+            });
+        } else {
+            b.setPositiveButton("重试", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface d, int w) {
+                    settle(a, orderNo, payType, token, risk);
+                }
+            });
+        }
+        b.show();
     }
 
     /**
@@ -170,14 +227,14 @@ public final class PayFlow {
     public static void jump(Activity a, int payType, String param) {
         String p = param == null ? "" : param.trim();
 
-        if (payType == PanggualApi.PAY_WALLET) {
-            toast(a, "余额支付要在官方 App 里完成");
-            openOfficial(a);
+        // 付款路径只走支付宝。任何情况下都不再打开官方 App —— 那条路会把用户丢进
+        // 一个找不到订单的界面里（本地没记录、官方 App 里也未必找得到那一笔）。
+        if (p.length() == 0) {
+            toast(a, "还没有支付参数，请点「重试」");
             return;
         }
-        if (p.length() == 0) {
-            toast(a, "没拿到支付参数，改去官方 App 付款");
-            openOfficial(a);
+        if (payType == PanggualApi.PAY_WALLET) {
+            toast(a, "钱包余额支付不支持跳转，请在机器上重新选支付方式");
             return;
         }
 
@@ -199,12 +256,12 @@ public final class PayFlow {
         } catch (Exception ignored) {
         }
 
-        // 3) 退到官方网关，交给浏览器／支付宝页面处理
+        // 3) 退到官方网关，交给支付宝页面处理
         if (open(a, "https://openapi.alipay.com/gateway.do?" + p)) {
             return;
         }
 
-        toast(a, "跳转失败，改去官方 App 付款");
+        toast(a, "打不开支付宝，改去官方 App 付款");
         openOfficial(a);
     }
 
@@ -223,16 +280,22 @@ public final class PayFlow {
         }
     }
 
-    /** 开一个 uri；能解析到接收方才算成功。 */
+    /**
+     * 开一个 uri。
+     *
+     * 这里**不能**用 {@code resolveActivity()} 做前置判断 —— 这正是「点去支付却打开胖乖」
+     * 的元凶：Android 11+ 的包可见性会让它在目标应用明明装着的情况下也返回 null，
+     * 于是能跳的支付宝被判成「跳不了」，一路 fallback 到 {@link #openOfficial}。
+     * 改成直接 startActivity，用 ActivityNotFoundException 判断成败。
+     */
     private static boolean open(Context c, String uri) {
         try {
             Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (i.resolveActivity(c.getPackageManager()) == null) {
-                return false;
-            }
             c.startActivity(i);
             return true;
+        } catch (ActivityNotFoundException e) {
+            return false;
         } catch (Exception e) {
             return false;
         }
