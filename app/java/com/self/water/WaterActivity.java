@@ -376,6 +376,14 @@ public class WaterActivity extends BaseActivity {
                             say("登录已过期，请重新登录。");
                         } else if (j.optInt("code", -999) == 0) {
                             say("✅ 已激活，请在机器上按键取水。");
+                        } else if (Api.gate(r)) {
+                            // 版本门焊死 —— 不再让用户对着「请升级最新版APP」干瞪眼，
+                            // 直接把他送到官方 App 的设备页去点这一下。
+                            btnActivate.setText("用 798 激活");
+                            say("798 要求用最新版官方 App 激活。已经帮你打开 798 的设备页 ——"
+                                    + " 在那里点一下开始机器就出水，回到本页照样能看状态、"
+                                    + "结束和结算。");
+                            openOfficialActivate();
                         } else {
                             say("激活失败：" + j.optString("msg", r.body));
                         }
@@ -383,6 +391,48 @@ public class WaterActivity extends BaseActivity {
                 });
             }
         }).start();
+    }
+
+    /**
+     * 把用户送到 798 官方 App 的设备页，让官方客户端去发那条我们发不出去的启动请求。
+     *
+     * 为什么只跳「启动」这一步：798 的版本门经验证只拦 dev/start，
+     * dev/home、dev/status、dev/end、pga-check 拿同一个 token 全都正常。
+     * 所以机器被官方 App 启动之后，看实时状态、结束用水、查支付结果
+     * 照样由本页接管，用户不用真的在 798 里把整套流程走完。
+     *
+     * 深链是 798 自己在 AndroidManifest 里对外的 BROWSABLE 过滤器：
+     *   ilife798s://i/device/nav  →  com.ilife.module.device.view.activity.NavDeviceActivity
+     * 没人接（没装 798 / 版本太老）就退回「打开 798」。
+     */
+    private void openOfficialActivate() {
+        String did = "";
+        try {
+            did = deviceId();
+        } catch (Exception ignored) {
+        }
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("ilife798s://i/device/nav?id=" + Uri.encode(did)));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            return;
+        } catch (ActivityNotFoundException e) {
+            // 下面走兜底
+        } catch (Exception e) {
+            // 同理
+        }
+        try {
+            Intent i = getPackageManager().getLaunchIntentForPackage("com.cloudora.android");
+            if (i == null) {
+                say("没找到 798 官方 App —— 装好后再点一次，或者直接在机器上扫码取水。");
+                return;
+            }
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            say("打不开 798：" + e.getMessage());
+        }
     }
 
     /**

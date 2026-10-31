@@ -85,7 +85,7 @@
     <string name="about_version">版本 %1$s (%2$d)</string>
     <string name="about_developer_label">开 发 者</string>
     <string name="about_developer">METACOLA</string>
-    <string name="about_desc">一个给山东大学趵突泉校区同学做的小工具，把取水、洗澡、洗衣三件事收进一个 App。\n\n基于对官方 App 接口的互操作性分析独立实现，不包含任何原应用的代码或资源。\n\n账号与设备信息只保存在你自己的手机上。</string>
+    <string name="about_desc">一个给山东大学趵突泉校区同学做的小工具，把取水、洗澡、洗衣三件事收进一个 App。\n\n基于对官方 App 接口的互操作性分析独立实现，不包含任何原应用的代码或资源。\n\n账号与设备信息只保存在你自己的手机上。\n\n——————————\n个人自用项目，不是任何服务方的官方客户端。\n仅供作者与同校区同学自用，不对外分发、不收费、不提供任何担保。\n通过各服务公开的 HTTP 接口通讯，不包含、不搬运任何服务方的代码或资源。\n使用即表示自行承担全部后果；若服务方认为不妥，联系即下架。</string>
     <string name="about_version_label">版本号</string>
     <string name="about_version_placeholder">—</string>
     <string name="about_contact">使用中遇到问题、想加功能，或者想把自己楼里的设备整理进内置设备库，都可以直接找开发者。\n\n开发者：METACOLA</string>

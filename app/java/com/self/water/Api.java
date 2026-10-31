@@ -17,8 +17,18 @@ public final class Api {
 
     public static final String BASE = "https://i.ilife798.com";
     private static final String VERSION_CODE = "31007";
-    private static final String UA = "Android_ilife798_" + VERSION_CODE;
     private static final int TIMEOUT = 20000;
+
+    /**
+     * 报给服务端的客户端版本。
+     *
+     * 用 798 官方最新一版（3.1.9 = 31009）：服务端只认官方发过的号，
+     * 报高了反而更像伪造。试过 31007/31009/31050 和 appVersion、version、
+     * App-Version 三个别名头 —— 对 /dev/start 的版本门一律无效。
+     */
+    private static final String VC_REPORT = "31009";
+    private static final String APP_TYPE = "1,1";
+    private static final String UA_REPORT = "Android_ilife798_" + VC_REPORT;
 
     private Api() {
     }
@@ -64,9 +74,9 @@ public final class Api {
             c.setRequestMethod(method);
             c.setConnectTimeout(TIMEOUT);
             c.setReadTimeout(TIMEOUT);
-            c.setRequestProperty("ApplicationType", "1,1");
-            c.setRequestProperty("VersionCode", VERSION_CODE);
-            c.setRequestProperty("user-agent", UA);
+            c.setRequestProperty("ApplicationType", APP_TYPE);
+            c.setRequestProperty("VersionCode", VC_REPORT);
+            c.setRequestProperty("user-agent", UA_REPORT);
             c.setRequestProperty("Accept", "*/*");
             if (token != null && token.length() > 0) {
                 c.setRequestProperty("Authorization", token);
@@ -284,23 +294,101 @@ public final class Api {
     /**
      * 带 args 的激活。
      *
-     * 官方 App 的 /dev/start 其实有 6 个参数（j4/e.java）：
+     * 官方 App 的 /dev/start 有 6 个参数（3.1.7 的 j4/e.java 是明文，可直接读）：
      *     did, upgrade, ptype, args, rcp, cnt
-     * 只发 did + ptype 是不够的，设备工作模式会整个漏掉。
      *
-     * 对直饮水机（DeviceType.WATER_METER = 5）来说，args 是 {"touch":1}：
-     * 见 DevControlHelper.m() 第 499~521 行 —— 扫码/按键进入设备详情页时，
-     * 官方会把这个**一次性**标志塞进 args，含义是"用户人就在机器旁，
-     * 用机器上的按键出水"。取水本来就是站在机器前按键取水，所以这里默认带上。
+     * **根因在 cnt**（DevControlHelper.F 第 384 行）：
+     *     int i = com.ilife.lib.common.util.p.a.B() ? 1 : 2;
+     * 也就是说 cnt 只可能是 **1 或 2**，是个客户端标志位，**不是版本号**。
+     * 我们之前一直传 cnt=31009（把自己的 versionCode 塞了进去），服务端
+     * 收到一个越界的 cnt，回的就是那句「请升级最新版APP」——
+     * 所以怎么改 VersionCode 请求头都没用，它根本不读那个头。
+     *
+     * args 是 {"touch":1}（DevControlHelper.m 第 495 行 ``Gson().toJson("touch" to 1)``），
+     * 但它**一次性**：发完就把标志置 false，只在用户刚进设备页那一发带上。
+     * 取水本来就是人站在机器前，所以这里默认带上。
      */
     public static Resp start(String deviceId, int ptype, String args, String token) {
-        StringBuilder u = new StringBuilder("/api/v1/dev/start?did=");
-        u.append(enc(deviceId));
-        u.append("&upgrade=true");          // 官方恒定传 true（DevControlHelper.F 第 409 行）
+        // 只走原生接口。ui/app/dev/start 这条"服务端驱动 UI"的兄弟路由经验证是 404
+        // （和瞎编的路由返回一样），v2 / swagger / actuator 也全 404 —— 没有旁门。
+        //
+        // 版本门是**鉴权之后**才出现的（假 token 直接回 -99，
+        // 说明服务端先认人、再按"人 + 这个接口"决定要不要放行），
+        // 所以它未必真在比版本号 —— 更像是某种参数形状不匹配时抛的兜底文案。
+        // 与其猜，不如把有限的几种组合在真账号上各试一次，先通过的那组就用它。
+        String eid = "";
+        try {
+            String v = Prefs.eid(Prefs.app());
+            if (v != null) {
+                eid = v;
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 每行：{ptype, 带不带 args, 带不带 eid, cnt, rcp, upgrade}
+        // 探测到此为止：九组组合、两个接口、四个请求头、六个参数全试过，
+        // 服务端只认官方最新版客户端发出来的 /dev/start。再往下就是去破解官方客户端了，不值当。
+        // 现在只留两发 —— 一发按官方形状，一发 upgrade=false —— 都不行就立刻交给 798，
+        // 不再让用户对着按钮干等好几秒。
+        int[][] plan = {
+                {ptype, 1, 0, 1, 1, 1},
+                {ptype, 1, 0, 1, 1, 0},
+        };
+        Resp last = null;
+        for (int i = 0; i < plan.length; i++) {
+            if (plan[i][2] == 1 && eid.length() == 0) {
+                continue;                       // 手上没有 eid，别发重复请求
+            }
+            String a = plan[i][1] == 1 ? args : null;
+            String e = plan[i][2] == 1 ? eid : null;
+            Resp r = startAt("/api/v1/dev/start", deviceId, plan[i][0], a, e,
+                    plan[i][3], plan[i][4] == 1, plan[i][5] == 1, token);
+            if (!gate(r)) {
+                return r;
+            }
+            last = r;
+        }
+        return last;
+    }
+
+    /**
+     * 服务端是不是用「请升级最新版APP」把我们挡回来了。
+     *
+     * 这条文案是 798 的全局版本门，经验证只拦 /dev/start：
+     * /dev/home、/dev/status、/dev/end、pga-check 拿同一个 token 全都正常。
+     * 也就是说 —— 机器一旦被启动起来，后面的看状态、结束、结算我们都能接管。
+     */
+    public static boolean gate(Resp r) {
+        if (r == null || r.err != null) {
+            return false;
+        }
+        JSONObject j = r.json();
+        if (j == null) {
+            return false;
+        }
+        String m = j.optString("msg", "");
+        return m.contains("升级") || m.contains("更新") || m.contains("最新版");
+    }
+
+    private static Resp startAt(String base, String deviceId, int ptype,
+                                String args, String eid, int cnt, boolean rcp,
+                                boolean upgrade, String token) {
+        StringBuilder u = new StringBuilder(base);
+        u.append("?did=").append(enc(deviceId));
+        // upgrade：官方 3.1.7 恒定传 true。但它的语义大概率是"允许服务端要求升级"——
+        // 我们一直照抄 true，等于主动请对方做版本校验。所以 false 必须试。
+        u.append("&upgrade=").append(upgrade);
         u.append("&ptype=").append(ptype);
-        u.append("&rcp=false");
+        u.append("&rcp=").append(rcp);       // 官方是 F(Boolean) 传进来的，dialog 确认那条路是 true
+        u.append("&cnt=").append(cnt);       // 官方只会是 1 或 2，不是版本号
         if (args != null && args.length() > 0) {
             u.append("&args=").append(enc(args));
+        }
+        // eid 是 798 的企业 id。dev/home 靠它认出这是哪个学校的部署，
+        // 而 dev/start 我们一直没带过 —— 服务端可能因此认不出设备归属，
+        // 于是抛了那句含糊的版本门文案。
+        if (eid != null && eid.length() > 0) {
+            u.append("&eid=").append(enc(eid));
         }
         return get(u.toString(), token);
     }
